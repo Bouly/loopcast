@@ -113,6 +113,14 @@ export const PhoneFrame: React.FC<{width: number; children: React.ReactNode}> = 
 	);
 };
 
+/** Une vraie capture d'écran dans le téléphone : on garde le haut (barre d'état, titre), on rogne le bas. */
+export const ScreenImage: React.FC<{src: string}> = ({src}) => (
+	<Img
+		src={src.startsWith('http') ? src : staticFile(src)}
+		style={{width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top'}}
+	/>
+);
+
 // ---------- Écrans d'app factices (placeholder tant qu'on n'a pas les vraies captures) ----------
 
 export type MockScreen =
@@ -120,15 +128,20 @@ export type MockScreen =
 	| {kind: 'stat'; title: string; value: string; label: string}
 	| {kind: 'chart'; title: string; bars: number[]; labels: string[]};
 
-export const MockScreenView: React.FC<{screen: MockScreen; brand: Brand}> = ({screen, brand}) => {
+/**
+ * Écran factice dessiné pour un `PhoneFrame` de largeur `width`. Les tailles suivent la largeur du
+ * téléphone et restent lisibles une fois la vidéo affichée sur un iPhone (texte ≥ 44 px pour 600 px).
+ */
+export const MockScreenView: React.FC<{screen: MockScreen; brand: Brand; width?: number}> = ({screen, brand, width = 600}) => {
 	const frame = useCurrentFrame();
 	const {fps} = useVideoConfig();
+	const k = width / 600;
 	const appear = (i: number) => spring({frame: frame - 6 - i * 5, fps, config: {damping: 16}});
 	return (
-		<div style={{fontFamily: FONT, padding: '120px 44px 40px', height: '100%', background: '#F6F6FA', color: '#111'}}>
-			<div style={{display: 'flex', alignItems: 'center', gap: 18, marginBottom: 40}}>
-				<AppIcon brand={brand} size={62} />
-				<div style={{fontSize: 44, fontWeight: 800}}>{screen.title}</div>
+		<div style={{fontFamily: FONT, padding: `${132 * k}px ${30 * k}px ${40 * k}px`, height: '100%', background: '#F6F6FA', color: '#111'}}>
+			<div style={{display: 'flex', alignItems: 'center', gap: 18 * k, marginBottom: 34 * k, paddingLeft: 6 * k}}>
+				<AppIcon brand={brand} size={68 * k} />
+				<div style={{fontSize: 54 * k, fontWeight: 800, letterSpacing: -0.5}}>{screen.title}</div>
 			</div>
 			{screen.kind === 'list' &&
 				screen.items.map((it, i) => (
@@ -136,56 +149,57 @@ export const MockScreenView: React.FC<{screen: MockScreen; brand: Brand}> = ({sc
 						key={i}
 						style={{
 							opacity: appear(i),
-							transform: `translateY(${(1 - appear(i)) * 30}px)`,
+							transform: `translateY(${(1 - appear(i)) * 30 * k}px)`,
 							background: '#FFF',
-							borderRadius: 28,
-							padding: '28px 30px',
-							marginBottom: 20,
+							borderRadius: 30 * k,
+							padding: `${26 * k}px ${26 * k}px`,
+							marginBottom: 18 * k,
 							display: 'flex',
 							alignItems: 'center',
-							gap: 22,
-							boxShadow: '0 4px 14px rgba(0,0,0,0.05)',
+							gap: 22 * k,
+							boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
 						}}
 					>
 						<div
 							style={{
-								width: 50,
-								height: 50,
-								borderRadius: 16,
-								background: it.done ? brand.accent : '#E7E7EF',
+								width: 60 * k,
+								height: 60 * k,
+								borderRadius: 18 * k,
+								background: it.done ? brand.accent : '#E3E3EC',
 								color: ink(brand),
 								display: 'flex',
 								alignItems: 'center',
 								justifyContent: 'center',
-								fontSize: 30,
+								fontSize: 38 * k,
 								fontWeight: 800,
+								flexShrink: 0,
 							}}
 						>
 							{it.done ? '✓' : ''}
 						</div>
-						<div style={{fontSize: 34, fontWeight: 600, textDecoration: it.done ? 'line-through' : 'none', color: it.done ? '#8A8A96' : '#111'}}>
+						<div style={{fontSize: 44 * k, fontWeight: 600, lineHeight: 1.15, textDecoration: it.done ? 'line-through' : 'none', color: it.done ? '#8A8A96' : '#111'}}>
 							{it.label}
 						</div>
 					</div>
 				))}
 			{screen.kind === 'stat' && (
-				<div style={{textAlign: 'center', marginTop: 120, transform: `scale(${0.6 + appear(0) * 0.4})`, opacity: appear(0)}}>
-					<div style={{fontSize: 210, fontWeight: 900, color: brand.accent, lineHeight: 1}}>{screen.value}</div>
-					<div style={{fontSize: 40, fontWeight: 600, color: '#55555F', marginTop: 24}}>{screen.label}</div>
+				<div style={{textAlign: 'center', marginTop: 130 * k, transform: `scale(${0.6 + appear(0) * 0.4})`, opacity: appear(0)}}>
+					<div style={{fontSize: 250 * k, fontWeight: 900, color: brand.accent, lineHeight: 1, letterSpacing: -6 * k}}>{screen.value}</div>
+					<div style={{fontSize: 50 * k, fontWeight: 700, color: '#4A4A55', marginTop: 26 * k}}>{screen.label}</div>
 				</div>
 			)}
 			{screen.kind === 'chart' && (
-				<div style={{display: 'flex', alignItems: 'flex-end', gap: 18, height: 560, marginTop: 80, padding: '0 10px'}}>
+				<div style={{display: 'flex', alignItems: 'flex-end', gap: 16 * k, height: 640 * k, marginTop: 80 * k, padding: `0 ${8 * k}px`}}>
 					{screen.bars.map((b, i) => (
 						<div key={i} style={{flex: 1, textAlign: 'center'}}>
 							<div
 								style={{
-									height: 480 * Math.max(0.05, Math.min(1, b)) * appear(i),
+									height: 560 * k * Math.max(0.05, Math.min(1, b)) * appear(i),
 									background: i === screen.bars.length - 1 ? brand.accent : withAlpha(brand.accent, 0.35),
-									borderRadius: 16,
+									borderRadius: 16 * k,
 								}}
 							/>
-							<div style={{fontSize: 26, color: '#77777F', marginTop: 12, fontWeight: 600}}>{screen.labels[i] ?? ''}</div>
+							<div style={{fontSize: 38 * k, color: '#5F5F6A', marginTop: 14 * k, fontWeight: 700}}>{screen.labels[i] ?? ''}</div>
 						</div>
 					))}
 				</div>

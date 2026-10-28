@@ -9,6 +9,9 @@
  *
  * Écrit une ligne JSON par job sur stdout : {"id","ok","files"|"error"}.
  * Variable REMOTION_BROWSER : chemin d'un Chrome headless déjà installé (sinon Remotion télécharge le sien).
+ *
+ * public/ (polices, captures des apps, clips) est relié au bundle par un lien symbolique au lieu d'être
+ * copié à chaque rendu, et le bundle temporaire est effacé à la fin.
  */
 import {bundle} from '@remotion/bundler';
 import {renderMedia, renderStill, selectComposition} from '@remotion/renderer';
@@ -30,6 +33,7 @@ log(`bundle… (${jobs.length} job(s))`);
 const serveUrl = await bundle({
 	entryPoint: path.join(here, 'src/index.ts'),
 	publicDir: path.join(here, 'public'),
+	symlinkPublicDir: process.platform !== 'win32',
 });
 
 for (const job of jobs) {
@@ -75,4 +79,11 @@ for (const job of jobs) {
 		log(`${job.id} ÉCHEC`, err?.message ?? err);
 		process.stdout.write(JSON.stringify({id: job.id, ok: false, error: String(err?.message ?? err)}) + '\n');
 	}
+}
+
+// Le bundle vit dans un dossier temporaire : on le retire (le lien vers public/ est supprimé, pas sa cible).
+try {
+	fs.rmSync(serveUrl, {recursive: true, force: true});
+} catch (err) {
+	log('bundle non supprimé', err?.message ?? err);
 }
