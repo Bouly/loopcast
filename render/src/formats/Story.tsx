@@ -15,7 +15,10 @@ import {AppIcon, MockScreen, MockScreenView, Music, PhoneFrame, ScreenImage, wit
  * - end       : carte de fin (icône, appel à l'action, store)
  *
  * `text` s'incruste en haut (**mot** = couleur de la marque) ; `subtitle` s'affiche en sous-titres,
- * par groupes de mots, au-dessus de la zone masquée par TikTok. Fondu court entre deux plans.
+ * par groupes de mots, au-dessus de la zone masquée par TikTok. Fondu court entre deux plans ; des plans
+ * screen/recording qui se suivent gardent le même iPhone et seul l'écran change.
+ * `duration` et `trimBefore` sont en secondes ; le module production calcule la même chronologie
+ * (engine/loopcast/production/plan.py) pour rattacher un défaut du contrôle qualité à un plan.
  */
 export type StoryShot = {
 	kind: 'clip' | 'screen' | 'recording' | 'card' | 'end';
@@ -281,7 +284,8 @@ const EndShot: React.FC<{shot: StoryShot; p: StoryProps; len: number}> = ({shot,
 				justifyContent: 'center',
 				alignItems: 'center',
 				textAlign: 'center',
-				padding: `${SAFE.top}px ${SAFE.right - 40}px ${SAFE.bottom}px ${SAFE.left + 40}px`,
+				// Marges égales des deux côtés : centré, et rien sous la colonne de boutons TikTok à droite.
+				padding: `${SAFE.top}px ${SAFE.right}px ${SAFE.bottom}px ${SAFE.right}px`,
 			}}
 		>
 			<div style={{transform: `scale(${0.6 + pop * 0.4 + glow * 0.04})`, opacity: pop}}>
@@ -413,10 +417,11 @@ const Subtitles: React.FC<{text: string; len: number; accent: string}> = ({text,
 	if (current < 0 || frame >= len) return null;
 	const pop = spring({frame: frame - startedAt, fps, config: {damping: 14, mass: 0.5}});
 	return (
-		<AbsoluteFill style={{justifyContent: 'flex-end', alignItems: 'center', paddingBottom: SUB_BOTTOM}}>
+		// Centrés dans la zone sûre (pas sur l'image entière) : jamais sous la colonne de boutons TikTok.
+		<AbsoluteFill style={{justifyContent: 'flex-end', alignItems: 'center', padding: `0 ${SAFE.right}px ${SUB_BOTTOM}px ${SAFE.left}px`}}>
 			<div
 				style={{
-					maxWidth: TEXT_W + 60,
+					maxWidth: TEXT_W,
 					textAlign: 'center',
 					fontSize: 68,
 					fontWeight: 900,
