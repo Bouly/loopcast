@@ -90,6 +90,10 @@ l'intégration l'ajoute à `settings.example.yaml`.
   téléphone (`AccountVoice.phone_id`).
 - **Idée** : ligne `ideas` (`idea` = JSON `Idea`) ; `status` : `proposed → approved → producing → produced`
   (ou `rejected`, `failed`). Une idée sert **un** téléphone : `phone_id`, donc ses deux comptes.
+  Pour une variation de gagnant, `ideas.parent_id` est l'id du **contenu** gagnant (pas d'une idée).
+  Les props d'un format Remotion ne contiennent ni `lang`, ni `brand`, ni `music`, ni `src`, ni `bg` (ajoutés à la
+  production) ; les captures y sont désignées par `asset_id`. Pour un format à plans, `formats.validate` reçoit
+  `{**props, "shots": [...]}`. Un plan IA dure 10 s au plus.
 - **Contenu** : ligne `content` (`files` = JSON des chemins absolus, sous `out/<content_id>/`) ; `status` :
   `draft → rendering → rendered → approved` (ou `qa_failed`, `rejected`, `failed`). `account_id` = le compte
   TikTok visé ; le même contenu peut partir sur l'Instagram du même téléphone.

@@ -42,6 +42,7 @@ DEFAULT_EFFORT = {
     "strategy.generate": "high",
     "ideas.generate": "high",
     "ideas.repair": "medium",
+    "ideas.variations": "high",
 }
 
 # $ par million de tokens : entrée, sortie, lecture du cache, écriture du cache (5 min = 1,25 × l'entrée).
