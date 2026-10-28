@@ -1,0 +1,37 @@
+{
+  "id": "habitudo",
+  "name": "Habitudo",
+  "_note": "Marque de démonstration (app fictive). Dupliquer ce fichier pour chaque vraie app.",
+  "accent": "#5B5BF7",
+  "accentInk": "#FFFFFF",
+  "handle": "@habitudo",
+  "category": "habit tracker",
+  "stores": {
+    "ios": "https://apps.apple.com/app/idCHANGE_ME",
+    "android": "https://play.google.com/store/apps/details?id=CHANGE_ME"
+  },
+  "storeLine": {
+    "fr": "Gratuit sur l'App Store et Google Play",
+    "en": "Free on the App Store & Google Play"
+  },
+  "audience": {
+    "fr": "18-30 ans, étudiants et jeunes actifs qui veulent de meilleures routines sans se prendre la tête",
+    "en": "18-30, students and young professionals who want better routines without overthinking it"
+  },
+  "pains": {
+    "fr": ["abandonne ses résolutions au bout de 3 jours", "trop d'apps compliquées", "culpabilise de scroller le soir"],
+    "en": ["quits resolutions after 3 days", "too many complicated apps", "feels guilty doom-scrolling at night"]
+  },
+  "promise": {
+    "fr": "3 habitudes, une coche par soir, une série qu'on n'a pas envie de casser",
+    "en": "3 habits, one check a night, a streak you won't want to break"
+  },
+  "tone": {
+    "fr": "direct, complice, tutoiement, jamais moralisateur",
+    "en": "direct, friendly, never preachy"
+  },
+  "assets": {
+    "icon": null,
+    "screens": []
+  }
+}

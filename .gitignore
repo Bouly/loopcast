@@ -1,0 +1,12 @@
+node_modules/
+render/out/
+render/public/brands/
+out/
+data/
+config/devices.yaml
+config/settings.yaml
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store

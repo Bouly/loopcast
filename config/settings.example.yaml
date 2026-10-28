@@ -1,0 +1,32 @@
+# Copier en config/settings.yaml (ignoré par git).
+
+review_mode: manual     # manual = un humain valide chaque contenu (UI swipe) ; auto = QA automatique seulement
+post_mode: assist       # assist = tout est préparé sur le téléphone, un humain appuie sur « Publier » ; auto = publication complète
+stock_target: 6         # contenus validés d'avance par compte ; en dessous, l'autopilote génère + rend
+autopilot_interval_minutes: 5
+metrics_every_hours: 6
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-5-5
+  max_tokens: 4000
+  # clé : variable d'environnement ANTHROPIC_API_KEY (jamais dans ce fichier)
+
+render:
+  remotion_browser: null   # null = Remotion télécharge son Chrome ; sinon chemin d'un chrome-headless-shell
+
+ai_disclosure:
+  # Activer le label « contenu généré par IA » de la plateforme dès qu'un format utilise
+  # des visages, voix ou scènes réalistes générés (UGC IA, Veo…). Les formats texte/UI actuels n'en ont pas besoin.
+  label_by_default: false
+
+regulator:
+  ramp:            # montée en charge selon l'âge du compte (jours depuis `created`)
+    - {from_day: 0,  per_day: 1}
+    - {from_day: 7,  per_day: 2}
+    - {from_day: 14, per_day: max}   # max = defaults.max_per_day du téléphone
+  metrics_min_age_hours: 24          # on ne juge un post qu'après 24 h
+  slow_down_ratio: 0.4               # médiane(5 derniers) / médiane(10 précédents) < 0.4 → -1 post/jour
+  speed_up_ratio: 1.5                # > 1.5 → +1 post/jour (jusqu'au max)
+  dead_views: 30                     # 3 posts d'affilée sous ce seuil → pause 48 h + alerte humaine
+  pause_hours: 48
