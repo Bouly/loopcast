@@ -47,6 +47,8 @@ def test_call_parameters_follow_each_model():
     assert h3["prompt_expansion_mode"] == "balanced"
     wan = models["wan3-720p"].inputs(vreq(duration_s=4.5))
     assert wan["duration"] == 5 and wan["audio"] is False
+    omni = models["omni-flash-720p"].inputs(vreq(seed=1, negative_prompt="blur"))
+    assert omni == {"prompt": vreq().prompt, "duration": 5, "aspect_ratio": "9:16", "resolution": "720p"}
 
 
 def test_settings_override_merge_and_errors():

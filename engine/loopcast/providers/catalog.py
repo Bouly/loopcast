@@ -297,6 +297,14 @@ DEFAULT_VIDEO_MODELS: list[VideoModel] = [
         params=WAN_PARAMS, source=_page("alibaba/wan-3.0/text-to-video"), verified=VERIFIED,
         notes="son compris dans le prix ; langues parlées non documentées"),
     VideoModel(
+        id="omni-flash-720p", label="Google Gemini Omni Flash 1.1 (720p)", provider="fal", tier="standard",
+        endpoint="google/gemini-omni-flash/v1.1/text-to-video", usd_per_s=0.10, min_s=3, max_s=10,
+        duration_format="int", audio="always", aspects=("9:16", "16:9"), resolution="720p", humans=True,
+        params={"seed": None, "negative_prompt": None, "audio": None},
+        source=_page("google/gemini-omni-flash/v1.1/text-to-video"), verified=VERIFIED,
+        notes="n° 1 en texte→vidéo sur Arena (21/09/2026) ; son natif ; parole évaluée en anglais seulement ; "
+              "pas d'image→vidéo documentée sur fal"),
+    VideoModel(
         id="veo31-fast-1080p", label="Google Veo 3.1 Fast (1080p)", provider="fal", tier="standard",
         endpoint="fal-ai/veo3.1/fast", endpoint_i2v="fal-ai/veo3.1/fast/image-to-video",
         usd_per_s=0.10, usd_per_s_audio=0.15, durations=(4, 6, 8), duration_format="{n}s",

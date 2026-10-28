@@ -230,6 +230,7 @@ class _FalProvider:
     name = "fal"
     kind = ""
     default_suffix = ""
+    suffixes: tuple[str, ...] = ()
 
     def __init__(self, model, client: FalClient, *, max_bytes: int = 300_000_000):
         self.model = model
