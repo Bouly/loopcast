@@ -333,7 +333,11 @@ def ensure_stock(ctx: jobs.JobContext, payload: dict) -> dict:
     s'il manque des vidéos par rapport à pipeline.stock_target, commande les idées (par lots bornés)."""
     app_id = _require(payload, "app_id")
     conn = ctx.conn
-    app = store.require_app(conn, app_id)
+    # Demande périodique de la diffusion : une app pas encore créée dans Loopcast (seulement citée dans
+    # devices.yaml) n'est pas une erreur, il n'y a simplement rien à faire.
+    app = conn.execute("SELECT * FROM apps WHERE id=?", (app_id,)).fetchone()
+    if app is None:
+        return {"skipped": "app pas encore ajoutée dans Loopcast"}
     if app["status"] != "active":
         return {"skipped": f"app au statut « {app['status']} »"}
     strat = store.current_strategy(conn, app_id)

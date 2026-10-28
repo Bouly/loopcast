@@ -270,10 +270,14 @@ def check_stock(conn: sqlite3.Connection, config, now: datetime, *,
     (une par app et par tranche de `stock_check_hours`), traitée par le module strategy."""
     s = settings or DiffusionSettings.from_config(config)
     low: dict[str, list[tuple[str, int]]] = {}
+    active_apps = {r["id"] for r in conn.execute("SELECT id FROM apps WHERE status='active'")}
     for account in accounts.list_accounts(conn):
         st = conn.execute("SELECT state FROM account_state WHERE account_id=?", (account.id,)).fetchone()
         if not account.app_id or (st is not None and st["state"] in ("inactive", "paused")):
             continue
+        if account.app_id not in active_apps:
+            continue                       # app pas encore ajoutée ou sans stratégie approuvée : rien à produire
+
         n = len(candidates(conn, account))
         if n < s.stock_target:
             low.setdefault(account.app_id, []).append((account.id, n))
