@@ -1,13 +1,14 @@
 import React from 'react';
-import {AbsoluteFill, Img, interpolate, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import {FONT} from '../common/fonts';
 import {BaseProps, SAFE} from '../common/types';
-import {CtaCard, MockScreen, MockScreenView, Music, PhoneFrame, withAlpha} from '../common/ui';
+import {CtaCard, MockScreen, MockScreenView, Music, PhoneFrame, ScreenImage, withAlpha} from '../common/ui';
 
 /**
  * Format « hook + démo » : une accroche plein écran (mots qui tombent un par un),
  * puis 2 à 5 écrans de l'app dans un téléphone, chacun avec sa légende, puis CTA.
  * Dans le hook, entourer un mot de **…** le colore avec l'accent de la marque.
+ * Un écran est une vraie capture (`src`, chemin dans public/) ou, à défaut, un écran factice (`mock`).
  */
 export type DemoScreen = {caption: string; src?: string; mock?: MockScreen};
 export type HookDemoProps = BaseProps & {
@@ -18,6 +19,8 @@ export type HookDemoProps = BaseProps & {
 const WORD_STEP = 5;
 const SCREEN_LEN = 78;
 const CTA_HOLD = 85;
+const PHONE_W = 600; // assez grand pour que l'écran reste lisible sur un iPhone
+const PHONE_TOP = 400;
 
 const words = (hook: string) => hook.split(/\s+/).filter(Boolean);
 
@@ -103,7 +106,7 @@ const ScreenSlide: React.FC<{screen: DemoScreen; p: HookDemoProps; last: boolean
 	const exitP = last ? 0 : interpolate(frame, [SCREEN_LEN - 4, SCREEN_LEN + 8], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
 	const x = interpolate(enter, [0, 1], [900, 0]) - exitP * 900;
 	const captionIn = spring({frame: frame - 4, fps, config: {damping: 14}});
-	const src = screen.src ? (screen.src.startsWith('http') ? screen.src : staticFile(screen.src)) : undefined;
+	const zoom = interpolate(frame, [0, SCREEN_LEN], [1, 1.03]); // léger mouvement pendant la lecture
 	return (
 		<AbsoluteFill>
 			<div
@@ -123,9 +126,20 @@ const ScreenSlide: React.FC<{screen: DemoScreen; p: HookDemoProps; last: boolean
 			>
 				{screen.caption}
 			</div>
-			<div style={{position: 'absolute', top: 470, left: 0, right: 0, display: 'flex', justifyContent: 'center', transform: `translateX(${x}px) rotate(${(1 - enter) * 6}deg)`}}>
-				<PhoneFrame width={520}>
-					{src ? <Img src={src} style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : screen.mock ? <MockScreenView screen={screen.mock} brand={p.brand} /> : null}
+			<div
+				style={{
+					position: 'absolute',
+					top: PHONE_TOP,
+					left: 0,
+					right: 0,
+					display: 'flex',
+					justifyContent: 'center',
+					transform: `translateX(${x}px) rotate(${(1 - enter) * 6}deg) scale(${zoom})`,
+					transformOrigin: '50% 30%',
+				}}
+			>
+				<PhoneFrame width={PHONE_W}>
+					{screen.src ? <ScreenImage src={screen.src} /> : screen.mock ? <MockScreenView screen={screen.mock} brand={p.brand} width={PHONE_W} /> : null}
 				</PhoneFrame>
 			</div>
 		</AbsoluteFill>

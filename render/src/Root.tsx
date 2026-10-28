@@ -6,6 +6,7 @@ import {ChatStory, ChatStoryProps, chatTimeline} from './formats/ChatStory';
 import {HookDemo, HookDemoProps, hookDemoTimeline} from './formats/HookDemo';
 import {NotesApp, NotesAppProps, notesTimeline} from './formats/NotesApp';
 import {Slideshow, SlideshowProps} from './formats/Slideshow';
+import {Story, StoryProps, storyDemo, storyTimeline} from './formats/Story';
 
 // Props de démonstration (utilisées dans le Studio Remotion : `npm run studio`).
 const brand = {name: 'Habitudo', accent: '#5B5BF7', handle: '@habitudo'};
@@ -89,5 +90,15 @@ export const RemotionRoot: React.FC = () => (
 			calculateMetadata={({props}) => ({durationInFrames: hookDemoTimeline(props as HookDemoProps).total})}
 		/>
 		<Still id="slideshow" component={Slideshow as React.FC<any>} width={WIDTH} height={HEIGHT} defaultProps={slideshowDemo} />
+		<Composition
+			id="story"
+			component={Story as React.FC<any>}
+			fps={FPS}
+			width={WIDTH}
+			height={HEIGHT}
+			durationInFrames={300}
+			defaultProps={storyDemo}
+			calculateMetadata={({props}) => ({durationInFrames: storyTimeline(props as StoryProps).total})}
+		/>
 	</>
 );
