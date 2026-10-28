@@ -41,6 +41,21 @@ ai_disclosure:
   # des visages, voix ou scènes réalistes générés (UGC IA, Veo…). Les formats texte/UI actuels n'en ont pas besoin.
   label_by_default: false
 
+diffusion:                       # planification et publication (engine/loopcast/diffusion)
+  dry_run: false                 # true = tout est planifié et journalisé, rien n'est publié
+  jitter_minutes: 20             # petit décalage des créneaux, stable pour un compte et un jour
+  instagram_offset_minutes: [30, 90]   # le même contenu part sur l'Instagram du téléphone, plus tard
+  retry_minutes: [10, 30]        # nouvelles tentatives d'un post en échec
+  late_tolerance_minutes: 60     # un créneau manqué de plus d'1 h est annulé (pas de rafale au redémarrage)
+  running_timeout_minutes: 45    # un post resté « en cours » passe « à finir » au lieu d'être republié
+  stock_check_hours: 6
+  metrics_days: 30
+  winners: {window_days: 14, top_share: 0.2, min_posts: 5}
+  ios_app:                       # publication en pilotant l'app sur l'iPhone : NON VÉRIFIÉE, désactivée
+    enabled: false
+    shortcut_name: Loopcast Import
+    album: Loopcast
+
 regulator:
   ramp:            # montée en charge selon l'âge du compte (jours depuis `created`)
     - {from_day: 0,  per_day: 1}

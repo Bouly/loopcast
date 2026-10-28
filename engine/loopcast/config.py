@@ -49,6 +49,7 @@ class PhoneConfig:
     slot: int = 0                           # index dans devices.yaml, sert à attribuer les ports
     apps: list[str] = field(default_factory=list)          # apps promues par ce téléphone (`brands`)
     accounts: dict[str, dict] = field(default_factory=dict)  # {tiktok: {handle, created, channel}, …}
+    options: dict[str, Any] = field(default_factory=dict)    # réglages propres au téléphone (fuseau, créneaux…)
 
 
 @dataclass
@@ -82,7 +83,9 @@ def load(root: Path | None = None) -> Config:
     devices = _load_yaml("devices")
     phones = [
         PhoneConfig(id=d["id"], udid=d.get("udid"), owner=d.get("owner") or "", lang=d.get("lang", "fr"), slot=i,
-                    apps=list(d.get("apps") or d.get("brands") or []), accounts=dict(d.get("accounts") or {}))
+                    apps=list(d.get("apps") or d.get("brands") or []), accounts=dict(d.get("accounts") or {}),
+                    options={k: v for k, v in d.items()
+                             if k not in ("id", "udid", "owner", "lang", "apps", "brands", "accounts", "model")})
         for i, d in enumerate(devices.get("devices") or [])
     ]
     return Config(root=ROOT, settings=settings, farm=FarmSettings.from_dict(settings.get("farm") or {}), phones=phones,
