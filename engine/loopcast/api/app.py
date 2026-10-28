@@ -96,6 +96,7 @@ def create_app(
             threading.Thread(target=screens.run_forever, args=(stop, config.farm.thumb_seconds),
                              name="captures", daemon=True).start()
         if run_jobs:
+            modules.startup(conn, config, jobs.utcnow)
             jobs_cfg = config.settings.get("jobs") or {}
             jobs.run_worker(str(app.state.db_path), config, stop, services=app.state.services,
                             threads=int(jobs_cfg.get("threads", 3)), limits=jobs_cfg.get("limits") or {})

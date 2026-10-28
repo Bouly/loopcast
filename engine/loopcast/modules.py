@@ -5,7 +5,8 @@ Chaque module est un paquet `loopcast.<nom>` qui peut fournir :
 - `api.py`    : `router = APIRouter(prefix="/api/<nom>")` (inclus dans l'API) ;
 - `cli.py`    : `register(subparsers)` pour ses commandes `python -m loopcast <nom> …` ;
 - `demo.py`   : ses réponses de démo (@llm.demo_responder) ;
-- `services.py` : `build(config, demo) -> dict` pour les services qu'il fournit (fournisseurs vidéo…).
+- `services.py` : `build(config, demo) -> dict` pour les services qu'il fournit (fournisseurs vidéo…) ;
+- `startup.py` : `startup(conn, config, clock)` appelé au démarrage des exécutants (premier tick…).
 
 Un module absent est simplement ignoré ; un module présent mais cassé fait échouer le démarrage
 (on préfère une erreur claire à un pipeline qui tourne à moitié).
@@ -70,3 +71,16 @@ def services(config: Any, demo: bool = False) -> dict[str, Any]:
         if hasattr(m, "build"):
             out.update(m.build(config, demo) or {})
     return out
+
+
+def startup(conn: Any, config: Any, clock: Any) -> None:
+    """Au démarrage des exécutants : comptes à jour, puis le démarrage propre à chaque module."""
+    from loopcast import accounts
+
+    accounts.sync_from_config(conn, config)
+    for m in load("startup"):
+        if hasattr(m, "startup"):
+            try:
+                m.startup(conn, config, clock)
+            except Exception:  # noqa: BLE001 : un module ne doit pas empêcher les autres de démarrer
+                log.exception("démarrage du module %s en échec", m.__name__)

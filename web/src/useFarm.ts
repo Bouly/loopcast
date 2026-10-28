@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type LogEvent, type Phone } from "./api";
+import { useLive } from "./live";
 
-/** État de la ferme, tenu à jour par SSE (/api/live) : aucun rechargement en boucle. */
+/** État de la ferme, tenu à jour par les événements en direct : aucun rechargement en boucle. */
 export function useFarm() {
   const [phones, setPhones] = useState<Phone[]>([]);
   const [events, setEvents] = useState<LogEvent[]>([]);
-  const [online, setOnline] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<number | null>(null);
@@ -32,27 +32,17 @@ export function useFarm() {
   useEffect(() => {
     void reload();
     api.events().then(setEvents).catch(() => {});
-
-    const source = new EventSource("/api/live");
-    source.onopen = () => {
-      setOnline(true);
-      void reload(); // rattrape ce qui a été manqué pendant la coupure
-    };
-    source.onerror = () => setOnline(false);
-    source.addEventListener("phones", scheduleReload);
-    source.addEventListener("screen", (e) => {
-      const { udid, etag } = JSON.parse((e as MessageEvent).data) as { udid: string; etag: string };
-      setPhones((list) => list.map((p) => (p.udid === udid ? { ...p, screen_etag: etag } : p)));
-    });
-    source.addEventListener("log", (e) => {
-      const ev = JSON.parse((e as MessageEvent).data) as LogEvent;
-      setEvents((list) => [{ ...ev, at: new Date().toISOString() }, ...list].slice(0, 200));
-    });
     return () => {
-      source.close();
       if (pending.current !== null) window.clearTimeout(pending.current);
     };
-  }, [reload, scheduleReload]);
+  }, [reload]);
 
-  return { phones, events, online, error, loaded, reload };
+  useLive("open", () => void reload());
+  useLive("phones", scheduleReload);
+  useLive("screen", ({ udid, etag }: { udid: string; etag: string }) =>
+    setPhones((list) => list.map((p) => (p.udid === udid ? { ...p, screen_etag: etag } : p))),
+  );
+  useLive("log", (ev: LogEvent) => setEvents((list) => [{ ...ev, at: new Date().toISOString() }, ...list].slice(0, 200)));
+
+  return { phones, events, error, loaded, reload };
 }

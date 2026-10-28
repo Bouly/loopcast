@@ -1,16 +1,37 @@
 # Copier en config/settings.yaml (ignoré par git).
 
-review_mode: manual     # manual = un humain valide chaque contenu (UI swipe) ; auto = QA automatique seulement
+pipeline:
+  posts_per_day_per_account: 3   # cible une fois la montée en charge faite (le code plafonne à 5)
+  review_mode: manual            # manual = un humain valide chaque vidéo (swipe) ; auto = contrôle qualité seulement
+  idea_review: auto              # auto = les idées partent en production sans relecture ; manual = relecture
+  auto_approve_strategy: false   # la stratégie d'une app est validée par un humain avant toute production
+  stock_target: 6                # vidéos prêtes d'avance par téléphone ; en dessous, l'autopilote en prépare
+  ideas_per_batch: 6
 post_mode: assist       # assist = tout est préparé sur le téléphone, un humain appuie sur « Publier » ; auto = publication complète
-stock_target: 6         # contenus validés d'avance par compte ; en dessous, l'autopilote génère + rend
 autopilot_interval_minutes: 5
 metrics_every_hours: 6
 
 llm:
-  provider: anthropic
-  model: claude-sonnet-5-5
-  max_tokens: 4000
-  # clé : variable d'environnement ANTHROPIC_API_KEY (jamais dans ce fichier)
+  model: claude-opus-5-5         # par défaut pour toutes les tâches ; surcharge possible par tâche
+  tasks:                         # effort : low | medium | high | xhigh | max
+    asset.describe: {effort: low}
+    app.analyze: {effort: high}
+    strategy.generate: {effort: high}
+    ideas.generate: {effort: high}
+  timeout_s: 600
+  keychain_service: loopcast-anthropic   # clé dans le trousseau macOS, ou variable ANTHROPIC_API_KEY (jamais ici)
+  demo: false                    # true = réponses de démo, sans clé ni coût
+
+budget:                          # plafonds en $ ; au-delà, les générations attendent le lendemain
+  daily_usd: 25
+  daily_usd_per_app: 15
+  monthly_usd: 600
+
+jobs:
+  threads: 3                     # exécutants de la file de tâches
+  limits:                        # tâches simultanées par famille
+    "video.": 2
+    "content.render": 1
 
 render:
   remotion_browser: null   # null = Remotion télécharge son Chrome ; sinon chemin d'un chrome-headless-shell

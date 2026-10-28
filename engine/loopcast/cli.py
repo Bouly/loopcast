@@ -167,8 +167,9 @@ def cmd_farm_doctor(args) -> int:
 def cmd_worker(args) -> int:
     from loopcast import jobs, modules
 
-    config, _conn = _setup(args)
+    config, conn = _setup(args)
     modules.load_all()
+    modules.startup(conn, config, jobs.utcnow)
     stop = threading.Event()
     jobs_cfg = config.settings.get("jobs") or {}
     jobs.run_worker(str(config.db_path), config, stop, services=modules.services(config, demo=args.demo),
