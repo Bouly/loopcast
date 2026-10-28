@@ -32,9 +32,22 @@ jobs:
   limits:                        # tâches simultanées par famille
     "video.": 2
     "content.render": 1
+    "content.compose": 1
 
 render:
   remotion_browser: null   # null = Remotion télécharge son Chrome ; sinon chemin d'un chrome-headless-shell
+  node: node               # chemin de Node si le service ne le trouve pas dans le PATH
+  timeout_s: 900           # délai maximal d'un rendu (plafonné à 1700)
+
+production:                # de l'idée au fichier contrôlé (engine/loopcast/production)
+  video_quality: {ai_video: standard, ugc_avatar: premium}   # niveau de générateur par type de plan
+  poll_s: 30               # attente entre deux vérifications des générations IA
+  generation_timeout_h: 24 # au-delà, le contenu passe en échec
+  max_auto_retries: 1      # une nouvelle génération automatique si un plan IA rate le contrôle qualité
+  qa:                      # contrôle qualité avant validation
+    min_duration_s: 6
+    max_duration_s: 60
+    max_mb: 50
 
 ai_disclosure:
   # Activer le label « contenu généré par IA » de la plateforme dès qu'un format utilise
