@@ -6,6 +6,7 @@ export function useFarm() {
   const [phones, setPhones] = useState<Phone[]>([]);
   const [events, setEvents] = useState<LogEvent[]>([]);
   const [online, setOnline] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<number | null>(null);
 
@@ -13,6 +14,7 @@ export function useFarm() {
     try {
       setPhones(await api.phones());
       setError(null);
+      setLoaded(true);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -52,5 +54,5 @@ export function useFarm() {
     };
   }, [reload, scheduleReload]);
 
-  return { phones, events, online, error, reload };
+  return { phones, events, online, error, loaded, reload };
 }
