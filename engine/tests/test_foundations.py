@@ -295,3 +295,12 @@ def test_accounts_sync(tmp_path):
     cfg.phones[0].accounts.pop("instagram")
     accounts.sync_from_config(conn, cfg)
     assert [a.id for a in accounts.list_accounts(conn)] == ["phone-1:tiktok"]
+
+
+def test_unknown_kinds_never_block_known_ones(jconn, clock):
+    with handlers(t_ok=(lambda ctx, p: None, {})):
+        for i in range(250):
+            jobs.enqueue(jconn, "module.absent", {"i": i}, clock=clock)
+        jid = jobs.enqueue(jconn, "t.ok", clock=clock)
+        assert jobs.run_one(jconn, None, "w", clock=clock).id == jid
+        assert jconn.execute("SELECT COUNT(*) FROM jobs WHERE kind='module.absent' AND status='queued'").fetchone()[0] == 250

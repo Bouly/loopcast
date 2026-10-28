@@ -157,17 +157,20 @@ def claim(conn: sqlite3.Connection, worker: str, *, clock: Clock = utcnow,
         if limits:
             for r in conn.execute("SELECT kind, COUNT(*) n FROM jobs WHERE status='running' GROUP BY kind"):
                 running[r["kind"]] = r["n"]
+        # Seulement les familles que ce processus sait traiter : une tâche d'un module absent attend
+        # (un autre processus, plus récent, la prendra) sans bloquer les autres.
+        known = [k for k in HANDLERS if not kinds or any(k == p or k.startswith(p) for p in kinds)]
+        if not known:
+            conn.execute("COMMIT")
+            return None
+        marks = ",".join("?" * len(known))
         rows = conn.execute(
-            """SELECT * FROM jobs WHERE status='queued' AND run_after <= ?
-               ORDER BY priority DESC, run_after, id LIMIT 50""",
-            (iso(now),),
+            f"""SELECT * FROM jobs WHERE status='queued' AND run_after <= ? AND kind IN ({marks})
+                ORDER BY priority DESC, run_after, id LIMIT 200""",
+            (iso(now), *known),
         ).fetchall()
         chosen = None
         for r in rows:
-            if kinds and not any(r["kind"] == k or r["kind"].startswith(k) for k in kinds):
-                continue
-            if r["kind"] not in HANDLERS:
-                continue                      # un autre processus (plus récent) saura la traiter
             if _over_limit(r["kind"], running, limits):
                 continue
             chosen = r
