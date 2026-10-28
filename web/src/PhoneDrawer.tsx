@@ -6,6 +6,7 @@ import {
   InstagramIcon,
   RefreshIcon,
   Settings01Icon,
+  StopIcon,
   TiktokIcon,
 } from "@hugeicons/core-free-icons";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
@@ -69,6 +70,12 @@ export function PhoneDrawer({ phone, onClose }: { phone: Phone; onClose: () => v
       }
     });
 
+  const release = () =>
+    act("Main rendue", async () => {
+      await api.release(udid);
+      setSize(null);
+    });
+
   const toPoint = (e: PointerEvent): Point | null => {
     const r = screen.current?.getBoundingClientRect();
     if (!r || !size) return null;
@@ -114,9 +121,17 @@ export function PhoneDrawer({ phone, onClose }: { phone: Phone; onClose: () => v
             <div className="sub">{[phone.model_name, phone.owner].filter(Boolean).join(", ")}</div>
           </div>
           <StatusDot status={phone.status} />
-          <button className="btn ghost icon close" onClick={onClose} aria-label="Fermer">
-            <Icon icon={Cancel01Icon} />
-          </button>
+          <div className="head-actions">
+            {controlled && (
+              <button className="btn" onClick={release}>
+                <Icon icon={StopIcon} />
+                Rendre la main
+              </button>
+            )}
+            <button className="btn ghost icon" onClick={onClose} aria-label="Fermer">
+              <Icon icon={Cancel01Icon} />
+            </button>
+          </div>
         </header>
 
         <div className="drawer-body">
@@ -206,19 +221,6 @@ export function PhoneDrawer({ phone, onClose }: { phone: Phone; onClose: () => v
                       Écrire
                     </button>
                   </form>
-                </section>
-                <section>
-                  <button
-                    className="btn ghost sm"
-                    onClick={() =>
-                      act("Main rendue", async () => {
-                        await api.release(udid);
-                        setSize(null);
-                      })
-                    }
-                  >
-                    Rendre la main
-                  </button>
                 </section>
               </>
             )}

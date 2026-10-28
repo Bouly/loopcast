@@ -369,14 +369,15 @@ button, input { font: inherit; color: inherit; }
 @keyframes slide { from { transform: translateX(24px); opacity: 0; } }
 .drawer-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 14px 16px 14px 20px;
   border-bottom: 1px solid var(--border);
 }
 .drawer-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .drawer-head .sub { color: var(--muted-foreground); font-size: 12.5px; }
-.drawer-head .close { margin-left: auto; }
+.head-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .drawer-body {
   flex: 1;
   overflow: auto;
