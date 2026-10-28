@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from pathlib import Path
 
 from loopcast import config as cfg
 from loopcast import db, jobs
@@ -60,6 +61,8 @@ def _setup(args):
 
 def _make_request(args, default_quality: str):
     quality = args.quality or default_quality
+    if args.image:                     # relatif au dossier courant (la tâche, elle, part de la racine du dépôt)
+        args.image = str(Path(args.image).expanduser().resolve())
     try:
         if args.kind == "video":
             return VideoRequest(prompt=args.prompt, duration_s=args.duration, aspect=args.aspect, audio=args.audio,
