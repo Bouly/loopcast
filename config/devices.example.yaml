@@ -1,45 +1,57 @@
-# Copier en config/devices.yaml (ignoré par git) et remplir les numéros de série (`adb devices`).
+# Copier en config/devices.yaml (ignoré par git).
 #
-# Règle : 1 téléphone = 1 compte par plateforme = 1 marque + 1 langue.
+# Règle : 1 iPhone = 1 compte par plateforme = 1 marque + 1 langue.
 # Pas de proxy, pas de faux réglages de localisation : chaque compte vit là où vit son téléphone.
+# channel : api_direct (TikTok audité / Instagram) | api_draft (brouillon TikTok à finir dans l'app) | ios_appium (plan B) | manual
 
 defaults:
   timezone: Europe/Paris
   windows: ["07:30-09:00", "12:00-14:00", "18:00-22:30"]   # créneaux de publication (heure locale)
-  min_gap_minutes: 180                                       # écart minimum entre 2 posts d'un même compte
-  max_per_day: 3                                             # plafond du régulateur (le code plafonne à 5 quoi qu'il arrive)
+  human_windows: ["09:00-21:00"]                            # quand quelqu'un peut finir un brouillon
+  min_gap_minutes: 180
+  max_per_day: 3                                             # le code plafonne à 5 quoi qu'il arrive
 
 devices:
   - id: phone-1
-    serial: "CHANGE_ME"
+    model: iPhone
+    udid: null            # seulement pour le plan B Appium
+    owner: "prénom de la personne qui l'utilise"
     lang: fr
     brands: [habitudo]
     accounts:
-      tiktok:    {handle: "@habitudo.fr", created: 2026-11-01}
-      instagram: {handle: "@habitudo.fr", created: 2026-11-01}
+      tiktok:    {handle: "@habitudo.fr", created: 2026-11-01, channel: api_draft}
+      instagram: {handle: "@habitudo.fr", created: 2026-11-01, channel: api_direct}
 
   - id: phone-2
-    serial: "CHANGE_ME"
+    model: iPhone
+    udid: null
+    owner: ""
     lang: en
     brands: [habitudo]
     accounts:
-      tiktok:    {handle: "@habitudo.app", created: 2026-11-01}
-      instagram: {handle: "@habitudo.app", created: 2026-11-01}
+      tiktok:    {handle: "@habitudo.app", created: 2026-11-01, channel: api_draft}
+      instagram: {handle: "@habitudo.app", created: 2026-11-01, channel: api_direct}
 
   - id: phone-3
-    serial: "CHANGE_ME"
+    model: iPhone
+    udid: null
+    owner: ""
     lang: fr
     brands: []          # à affecter à la 2e app
     accounts: {}
 
   - id: phone-4
-    serial: "CHANGE_ME"
+    model: iPhone
+    udid: null
+    owner: ""
     lang: en
     brands: []
     accounts: {}
 
   - id: phone-5
-    serial: "CHANGE_ME"
+    model: iPhone
+    udid: null
+    owner: ""
     lang: fr
     brands: []
     accounts: {}
