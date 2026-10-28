@@ -47,6 +47,7 @@ def capabilities(config: Config, phone: PhoneConfig) -> dict:
         "appium:noReset": True,
         "appium:newCommandTimeout": 900,
         "appium:wdaLaunchTimeout": 120000,
+        "appium:waitForIdleTimeout": 0,
     }
     if config.farm.xcode_org_id:
         caps["appium:xcodeOrgId"] = config.farm.xcode_org_id
@@ -57,6 +58,25 @@ def capabilities(config: Config, phone: PhoneConfig) -> dict:
     if config.farm.wda_bundle_id:
         caps["appium:updatedWDABundleId"] = config.farm.wda_bundle_id
     return caps
+
+
+# Réglages appliqués à chaque session WebDriverAgent.
+WDA_SETTINGS = {
+    # Flux d'écran léger pour le dashboard : 10 i/s, demi-résolution
+    "mjpegServerFramerate": 10,
+    "mjpegScalingFactor": 50,
+    # Ne pas attendre que l'app soit « au repos » : TikTok ou Instagram, avec leur vidéo en continu,
+    # ne le sont jamais. Sans ça, captures et flux échouent (« Cannot take a screenshot within
+    # 20000 ms ») et les commandes s'empilent : constaté le 29/10/2026 sur un iPhone 14 Pro Max.
+    "waitForIdleTimeout": 0,
+    "animationCoolOffTimeout": 0,
+    # Viser l'écran d'accueil d'iOS plutôt que l'app au premier plan : les gestes sont des
+    # coordonnées à l'écran, ils arrivent quand même dans l'app, sans lire son arbre d'interface.
+    # Celui de TikTok met plus de 7 s à venir et bloquait WDA à chaque toucher ou balayage.
+    "defaultActiveApplication": "com.apple.springboard",
+    "snapshotMaxDepth": 10,
+    "customSnapshotTimeout": 2,
+}
 
 
 class PhoneController:
@@ -95,9 +115,7 @@ class PhoneController:
         if not session_id:
             raise ControlError(f"réponse Appium inattendue : {value}")
         self._set_session(udid, session_id)
-        # Flux d'écran léger pour le dashboard : 10 i/s, demi-résolution
-        self._call("POST", f"/session/{session_id}/appium/settings",
-                   {"settings": {"mjpegServerFramerate": 10, "mjpegScalingFactor": 50}})
+        self._call("POST", f"/session/{session_id}/appium/settings", {"settings": WDA_SETTINGS})
         return session_id
 
     def stop(self, udid: str) -> None:

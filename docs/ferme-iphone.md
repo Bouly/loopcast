@@ -100,6 +100,13 @@ Pièges rencontrés lors de ce premier test, à refaire sur chaque nouveau Mac o
   `allowProvisioningDeviceRegistration` à Appium (déjà fait dans le code).
 - **« Developer App Certificate is not trusted »** : sur l'iPhone, Réglages › Général › VPN et gestion de l'appareil ›
   App de développeur › Faire confiance. À refaire si le certificat change.
+- **Écran figé dans TikTok (ou toute app avec de la vidéo en continu)** : WebDriverAgent attend par défaut que l'app
+  soit « au repos » et relit son arbre d'interface avant chaque geste ; celui de TikTok met plus de 7 s. Résultat :
+  « Cannot take a screenshot within 20000 ms », flux figé, gestes empilés. Loopcast applique à chaque session
+  `waitForIdleTimeout: 0`, `animationCoolOffTimeout: 0` et `defaultActiveApplication: com.apple.springboard`
+  (`WDA_SETTINGS` dans `engine/loopcast/farm/control.py`). Mesuré dans TikTok le 29/10/2026 : flux à 9,7 i/s,
+  défilement en 0,7 s, toucher en 0,4 s. Si WebDriverAgent reste bloqué malgré tout : rendre la main, redémarrer
+  Appium, reprendre la main.
 
 ## Développer sans iPhone
 

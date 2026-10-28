@@ -62,6 +62,12 @@ def test_start_reuses_live_session(ctl, appium):
     assert sum(1 for m, p, _ in appium.calls if (m, p) == ("POST", "/session")) == 1
 
 
+def test_start_disables_idle_waiting(ctl, appium):
+    ctl.start(UDID1)
+    settings = next(b for m, p, b in appium.calls if p.endswith("/appium/settings"))["settings"]
+    assert settings["waitForIdleTimeout"] == 0 and settings["animationCoolOffTimeout"] == 0
+
+
 def test_start_recreates_dead_session(ctl, appium):
     ctl.start(UDID1)
     appium.sessions.clear()                 # Appium redémarré : la session n'existe plus
