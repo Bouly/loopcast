@@ -51,6 +51,9 @@ def capabilities(config: Config, phone: PhoneConfig) -> dict:
     if config.farm.xcode_org_id:
         caps["appium:xcodeOrgId"] = config.farm.xcode_org_id
         caps["appium:xcodeSigningId"] = "Apple Development"
+        # Laisse Xcode créer le profil de provisionnement et enregistrer l'iPhone sur le compte
+        # (sinon : « No profiles for '….xctrunner' were found », xcodebuild code 65).
+        caps["appium:allowProvisioningDeviceRegistration"] = True
     if config.farm.wda_bundle_id:
         caps["appium:updatedWDABundleId"] = config.farm.wda_bundle_id
     return caps
@@ -133,6 +136,10 @@ class PhoneController:
         value = data.get("value") if isinstance(data, dict) else None
         if resp.status_code >= 400:
             message = value.get("message") if isinstance(value, dict) else resp.text
+            if isinstance(value, dict) and value.get("error") == "invalid session id" and path.startswith("/session/"):
+                # Session morte (Appium ou WebDriverAgent relancé) : on l'oublie pour que l'UI repropose la prise en main
+                self.conn.execute("UPDATE phones SET session_id=NULL WHERE session_id=?", (path.split("/")[2],))
+                raise ControlError("session perdue : reprendre la main")
             raise ControlError(f"Appium {resp.status_code} : {str(message)[:300]}")
         return value
 

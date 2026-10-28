@@ -30,6 +30,27 @@ class DeviceHealth:
     errors: list[str] = field(default_factory=list)
 
 
+# Code interne Apple (ProductType) → nom commercial. Les numéros sont décalés : iPhone15,3 = iPhone 14 Pro Max.
+MODEL_NAMES = {
+    "iPhone13,1": "iPhone 12 mini", "iPhone13,2": "iPhone 12",
+    "iPhone13,3": "iPhone 12 Pro", "iPhone13,4": "iPhone 12 Pro Max",
+    "iPhone14,4": "iPhone 13 mini", "iPhone14,5": "iPhone 13",
+    "iPhone14,2": "iPhone 13 Pro", "iPhone14,3": "iPhone 13 Pro Max",
+    "iPhone14,6": "iPhone SE (3e gén.)",
+    "iPhone14,7": "iPhone 14", "iPhone14,8": "iPhone 14 Plus",
+    "iPhone15,2": "iPhone 14 Pro", "iPhone15,3": "iPhone 14 Pro Max",
+    "iPhone15,4": "iPhone 15", "iPhone15,5": "iPhone 15 Plus",
+    "iPhone16,1": "iPhone 15 Pro", "iPhone16,2": "iPhone 15 Pro Max",
+    "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus",
+    "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max",
+    "iPhone17,5": "iPhone 16e",
+}
+
+
+def model_name(product_type: str) -> str:
+    return MODEL_NAMES.get(product_type, product_type)
+
+
 class DeviceBackend(Protocol):
     def list_devices(self) -> list[DeviceInfo]: ...
     def health(self, udid: str) -> DeviceHealth: ...
@@ -40,6 +61,21 @@ class BackendError(RuntimeError):
     pass
 
 
+def _find_exe(exe: str) -> str:
+    """Le PATH d'un service launchd ou d'un terminal n'a pas toujours ~/.local/bin :
+    on cherche aussi à côté de l'interpréteur (extra [ios] installé dans le venv)."""
+    import shutil
+    import sys
+    from pathlib import Path
+
+    if "/" in exe or shutil.which(exe):
+        return exe
+    for candidate in (Path(sys.executable).parent / exe, Path.home() / ".local" / "bin" / exe):
+        if candidate.exists():
+            return str(candidate)
+    return exe
+
+
 class PyMobileDeviceBackend:
     """Appelle `pymobiledevice3 … --udid` et lit le JSON.
 
@@ -48,7 +84,7 @@ class PyMobileDeviceBackend:
     """
 
     def __init__(self, exe: str = "pymobiledevice3", timeout: float = 20):
-        self.exe = exe
+        self.exe = _find_exe(exe)
         self.timeout = timeout
 
     def _run(self, *args: str) -> str:

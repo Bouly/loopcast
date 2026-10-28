@@ -25,7 +25,7 @@ class FakeAppium:
             return httpx.Response(200, json={"value": {"sessionId": "s1", "capabilities": {}}})
         parts = path.split("/")
         if len(parts) > 2 and parts[2] not in self.sessions:
-            return httpx.Response(404, json={"value": {"error": "invalid session id", "message": "session perdue"}})
+            return httpx.Response(404, json={"value": {"error": "invalid session id", "message": "Session does not exist"}})
         if path.endswith("/window/rect"):
             return httpx.Response(200, json={"value": {"x": 0, "y": 0, "width": 393, "height": 852}})
         if path.endswith("/screenshot"):
@@ -53,7 +53,7 @@ def test_capabilities_are_unique_per_phone(config):
     c1, c2 = (capabilities(config, p) for p in config.phones[:2])
     for key in ("appium:udid", "appium:wdaLocalPort", "appium:mjpegServerPort", "appium:derivedDataPath"):
         assert c1[key] != c2[key]
-    assert c1["appium:xcodeOrgId"] == "TEAM123"
+    assert c1["appium:xcodeOrgId"] == "TEAM123" and c1["appium:allowProvisioningDeviceRegistration"] is True
 
 
 def test_start_reuses_live_session(ctl, appium):
@@ -106,3 +106,11 @@ def test_appium_down(config, conn, backend, clock):
     ctl = PhoneController(config, conn, httpx.Client(transport=httpx.MockTransport(refuse), base_url="http://appium"))
     with pytest.raises(ControlError, match="Appium injoignable"):
         ctl.start(UDID1)
+
+
+def test_dead_session_is_forgotten(ctl, appium):
+    ctl.start(UDID1)
+    appium.sessions.clear()                 # WebDriverAgent relancé sur l'iPhone
+    with pytest.raises(ControlError, match="session perdue"):
+        ctl.tap(UDID1, 1, 1)
+    assert ctl.session_id(UDID1) is None    # l'UI repropose « Prendre la main »

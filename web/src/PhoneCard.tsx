@@ -34,6 +34,7 @@ export const PhoneCard = memo(function PhoneCard({
       <div className="meta">
         {STATUS_LABEL[p.status]}
         {p.battery !== null && ` · ${p.battery} %${p.charging ? " ⚡" : ""}`}
+        {p.model_name && ` · ${p.model_name}`}
         {p.ios && ` · iOS ${p.ios}`}
         {p.owner && ` · ${p.owner}`}
       </div>

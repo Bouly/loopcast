@@ -78,6 +78,6 @@ def test_listing_failure_is_logged_not_raised(config, conn, clock):
 def test_list_includes_declared_but_never_seen(config, conn, backend, clock):
     Supervisor(config, conn, backend, clock).tick()
     rows = {r["phone_id"]: r for r in list_phones(conn, config)}
-    assert rows["phone-1"]["status"] == "ok"
+    assert rows["phone-1"]["status"] == "ok" and rows["phone-1"]["model_name"] == "iPhone 14 Pro"
     assert rows["phone-2"]["status"] == "never_seen" and rows["phone-2"]["udid"] == UDID2
     assert rows["phone-3"]["problems"][0]["message"] == "UDID à renseigner"

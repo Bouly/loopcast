@@ -318,7 +318,7 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [x] Moteur de rendu Remotion + 4 formats FR/EN, testés
 - [x] Fichiers d'exemple : marque, iPhones, réglages
 - [ ] Démarches plateformes : app TikTok + audit, app Meta, bucket + domaine
-- [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — testé en simulé, **à valider sur un vrai iPhone**
+- [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — validé sur un iPhone 14 Pro Max le 29/10/2026
 - [x] `engine/` : config, DB (schéma §5.1 + table `phones`), CLI (`serve`, `farm list|watch|screenshot|doctor`)
 - [ ] `engine/` : formats
 - [ ] Génération LLM + contenus seed

@@ -84,10 +84,22 @@ Sans les services : `sudo pymobiledevice3 remote tunneld` dans un terminal, `app
 4. Dashboard › phone-1 › Prendre la main : l'écran en direct apparaît. Tester Accueil, ouvrir Réglages, toucher, balayer, taper du texte dans un champ.
 5. Débrancher : le journal note « débranché », puis une alerte après 10 min. Rebrancher : « de nouveau connecté ».
 
-À noter pendant ce test (points non vérifiables sans téléphone, à corriger dans le code si besoin) :
-- les noms de champs de `pymobiledevice3 usbmux list` et `diagnostics battery single` (lus de façon tolérante dans `engine/loopcast/farm/backend.py`) ;
-- la commande `amfi developer-mode-status` ;
-- que le flux vidéo `mjpegServerPort` est bien relayé par Appium sur le Mac.
+Validé le 29/10/2026 sur un iPhone 14 Pro Max (iOS 27.0.1), Xcode 27.1, Appium 3.9.0, driver XCUITest 12.22.3,
+pymobiledevice3 11.46.0 : détection, santé, captures, prise en main, Accueil, ouverture d'apps et flux vidéo.
+
+Pièges rencontrés lors de ce premier test, à refaire sur chaque nouveau Mac ou iPhone :
+- **Apple ID dans Xcode** : Xcode › Settings › Accounts › + . Un Apple ID gratuit suffit pour tester (« Personal Team »),
+  mais la signature expire au bout de 7 jours ; le compte payant la garde un an.
+- **Certificat de signature** : Accounts › l'équipe › Manage Certificates… › + › Apple Development.
+  Le Team ID à mettre dans `farm.xcode_org_id` est le champ OU du certificat :
+  `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject`.
+- **Certificat « non valide »** (`security find-identity -v -p codesigning` → 0 valid) : il manque l'autorité
+  intermédiaire G3 d'Apple. La télécharger sur https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer,
+  vérifier (`security verify-cert -c AppleWWDRCAG3.cer`) puis `security import AppleWWDRCAG3.cer -k ~/Library/Keychains/login.keychain-db`.
+- **xcodebuild code 65 « No profiles for ….xctrunner »** : Xcode doit pouvoir créer le profil ; Loopcast passe
+  `allowProvisioningDeviceRegistration` à Appium (déjà fait dans le code).
+- **« Developer App Certificate is not trusted »** : sur l'iPhone, Réglages › Général › VPN et gestion de l'appareil ›
+  App de développeur › Faire confiance. À refaire si le certificat change.
 
 ## Développer sans iPhone
 

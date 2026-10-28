@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from loopcast.config import Config
-from loopcast.farm.backend import BackendError, DeviceBackend
+from loopcast.farm.backend import BackendError, DeviceBackend, model_name
 
 log = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class Supervisor:
             label = phone.id if phone else dev.name or dev.udid
 
             if prev is None:
-                emit(dev.udid, "phone_new", f"Nouvel iPhone branché : {label} ({dev.model}, iOS {dev.ios})")
+                emit(dev.udid, "phone_new", f"Nouvel iPhone branché : {label} ({model_name(dev.model)}, iOS {dev.ios})")
             elif "offline" in prev_problems:
                 emit(dev.udid, "phone_back", f"{label} est de nouveau connecté")
             for code in sorted(set(problems) - prev_problems):
@@ -192,6 +192,7 @@ def list_phones(conn: sqlite3.Connection, config: Config) -> list[dict]:
     rows = [dict(r) for r in conn.execute("SELECT * FROM phones")]
     for r in rows:
         r["problems"] = [{"code": c, "message": PROBLEMS.get(c, c)} for c in json.loads(r["problems"] or "[]")]
+        r["model_name"] = model_name(r["model"] or "")
         phone = config.phone_by_udid(r["udid"])
         r["owner"] = phone.owner if phone else ""
         r["slot"] = phone.slot if phone else None
@@ -200,7 +201,7 @@ def list_phones(conn: sqlite3.Connection, config: Config) -> list[dict]:
         if p.udid and p.udid in seen_udids:
             continue
         rows.append({
-            "udid": p.udid, "phone_id": p.id, "name": "", "model": "", "ios": "", "connection": None,
+            "udid": p.udid, "phone_id": p.id, "name": "", "model": "", "model_name": "", "ios": "", "connection": None,
             "status": "never_seen", "owner": p.owner, "slot": p.slot, "battery": None, "charging": None,
             "session_id": None, "last_seen": None,
             "problems": [{"code": "never_seen", "message": "Jamais branché" if p.udid else "UDID à renseigner"}],

@@ -5,6 +5,7 @@ export type Phone = {
   phone_id: string | null;
   name: string;
   model: string;
+  model_name: string;
   ios: string;
   connection: string | null;
   status: "ok" | "attention" | "offline" | "unknown" | "never_seen";

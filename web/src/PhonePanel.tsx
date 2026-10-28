@@ -155,7 +155,7 @@ export function PhonePanel({ phone, onClose }: { phone: Phone; onClose: () => vo
             <dt>État</dt>
             <dd>{STATUS_LABEL[phone.status]}</dd>
             <dt>Modèle</dt>
-            <dd>{phone.model || "—"}</dd>
+            <dd>{phone.model_name || "—"}{phone.model && phone.model !== phone.model_name ? ` (${phone.model})` : ""}</dd>
             <dt>iOS</dt>
             <dd>{phone.ios || "—"}</dd>
             <dt>Batterie</dt>
