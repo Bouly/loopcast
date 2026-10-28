@@ -10,3 +10,5 @@ config/settings.yaml
 __pycache__/
 *.pyc
 .DS_Store
+*.egg-info/
+web/dist/

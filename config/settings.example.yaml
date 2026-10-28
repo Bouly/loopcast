@@ -30,3 +30,19 @@ regulator:
   speed_up_ratio: 1.5                # > 1.5 → +1 post/jour (jusqu'au max)
   dead_views: 30                     # 3 posts d'affilée sous ce seuil → pause 48 h + alerte humaine
   pause_hours: 48
+
+farm:
+  # Ferme d'iPhones branchés au Mac (voir docs/ferme-iphone.md)
+  backend: pymobiledevice3          # pymobiledevice3 (vrais iPhones, sur le Mac) | fake (démo, tests)
+  appium_url: http://127.0.0.1:4723
+  poll_seconds: 15                  # un tour de supervision (branchement, confiance, mode dév., batterie)
+  thumb_seconds: 5                  # vignettes d'écran du dashboard
+  battery_low: 25
+  offline_alert_minutes: 10         # alerte si un iPhone reste débranché plus longtemps
+  wda_base_port: 8100               # ports WebDriverAgent : 8100 + rang de l'iPhone dans devices.yaml
+  mjpeg_base_port: 9100             # flux vidéo : 9100 + rang
+  xcode_org_id: null                # Team ID Apple Developer (signature de WebDriverAgent)
+  wda_bundle_id: null               # ex. com.<entreprise>.loopcast.wda (identifiant propre à l'équipe)
+
+notify:
+  ntfy_url: null                    # ex. https://ntfy.sh/loopcast-<suffixe-secret> : push sur les iPhones de l'équipe

@@ -21,6 +21,8 @@ Référence d'inspiration : Fastlane (usefastlane.ai). On reprend leurs idées f
 | Base de données | SQLite (`data/loopcast.db`) | Zéro ops |
 | Téléphones | **iPhone uniquement** (5 appareils) | Matériel de l'équipe |
 | Publication | **APIs officielles d'abord** (Instagram Graph API, TikTok Content Posting API) ; automatisation d'app iPhone (Appium) seulement en secours | Sur iPhone, l'automatisation d'apps est lourde et fragile ; les APIs sont stables et ne risquent pas les comptes |
+| Ferme d'iPhones | **Pilotage et supervision des iPhones depuis le Mac** (pymobiledevice3 + Appium/WebDriverAgent), dashboard de prise en main à distance — décidé le 29/10/2026, construit en premier | L'équipe veut contrôler les 5 téléphones depuis un seul écran ; même socle que le plan B de publication. Création de comptes, proxy et engagement restent hors du code (§3) |
+| Back / front | **Séparés** : `engine/` (API FastAPI seule) et `web/` (React + Vite, construit en statique et servi par le back en prod) | Performance : front statique de 73 Ko gzip, état poussé par SSE, captures en cache côté back |
 | Médias pour les APIs | Stockage objet public à URL signée/temporaire (ex. Cloudflare R2 avec domaine perso vérifié) | Instagram et TikTok vont chercher les fichiers par URL |
 | Un format = | une composition Remotion + un spec de validation Python | Ajouter un format sans toucher au pipeline |
 | Priorité formats | Formats « UI recréée » et statiques d'abord, vidéo IA (Veo/Kling) plus tard | Chez Fastlane une vidéo coûte ~16× un statique ; nos formats code coûtent ~0 |
@@ -316,10 +318,12 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [x] Moteur de rendu Remotion + 4 formats FR/EN, testés
 - [x] Fichiers d'exemple : marque, iPhones, réglages
 - [ ] Démarches plateformes : app TikTok + audit, app Meta, bucket + domaine
-- [ ] `engine/` : config, DB, formats, CLI
+- [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — testé en simulé, **à valider sur un vrai iPhone**
+- [x] `engine/` : config, DB (schéma §5.1 + table `phones`), CLI (`serve`, `farm list|watch|screenshot|doctor`)
+- [ ] `engine/` : formats
 - [ ] Génération LLM + contenus seed
 - [ ] Rendu piloté depuis Python + QA auto
-- [ ] API FastAPI + front React (validation, à finir, comptes, calendrier)
+- [ ] API FastAPI + front React : écrans validation, à finir, comptes, calendrier (l'écran Ferme existe)
 - [ ] Stockage objet + Publisher Instagram
 - [ ] Publisher TikTok (brouillon, puis direct après audit)
 - [ ] Planification + régulateur + worker

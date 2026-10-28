@@ -14,7 +14,7 @@ defaults:
 devices:
   - id: phone-1
     model: iPhone
-    udid: null            # seulement pour le plan B Appium
+    udid: null            # UDID affiché par `python -m loopcast farm list` une fois branché
     owner: "prénom de la personne qui l'utilise"
     lang: fr
     brands: [habitudo]
