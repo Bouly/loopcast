@@ -26,12 +26,15 @@ _local = threading.local()
 def conn(request: Request):
     """Une connexion SQLite par thread de l'API (FastAPI exécute les routes `def` dans un pool)."""
     path = str(request.app.state.db_path)
+    if path == ":memory:":
+        # Base en mémoire (tests) : une seule connexion par application, jamais mise en cache entre apps.
+        return request.app.state.conn
     cache = getattr(_local, "conns", None)
     if cache is None:
         cache = _local.conns = {}
     c = cache.get(path)
     if c is None:
-        c = cache[path] = db.connect(path, run_migrations=False) if path != ":memory:" else request.app.state.conn
+        c = cache[path] = db.connect(path, run_migrations=False)
     return c
 
 

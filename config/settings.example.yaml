@@ -41,6 +41,15 @@ ai_disclosure:
   # des visages, voix ou scènes réalistes générés (UGC IA, Veo…). Les formats texte/UI actuels n'en ont pas besoin.
   label_by_default: false
 
+apps:                            # comprendre une app (engine/loopcast/apps)
+  max_upload_mb: 500             # captures, vidéos de démo enregistrées sur iPhone, documents
+  fetch_timeout_s: 20            # lecture de l'App Store, du site, de Google Play
+  max_page_bytes: 4000000
+  max_source_chars: 20000        # texte gardé par source
+  analysis_images: 8             # captures montrées à Claude pendant l'analyse
+  appstore_screenshots: 10       # captures de l'App Store importées si l'équipe n'en fournit pas
+  max_question_rounds: 3
+
 diffusion:                       # planification et publication (engine/loopcast/diffusion)
   dry_run: false                 # true = tout est planifié et journalisé, rien n'est publié
   jitter_minutes: 20             # petit décalage des créneaux, stable pour un compte et un jour
