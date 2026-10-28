@@ -133,7 +133,7 @@ def cmd_farm_doctor(args) -> int:
     check(f"Xcode ({xcode.splitlines()[0] if xcode else 'absent'})", bool(xcode),
           "installer Xcode depuis l'App Store, puis : sudo xcode-select -s /Applications/Xcode.app")
     check("pymobiledevice3", shutil.which(config.farm.pymobiledevice3) is not None,
-          "pipx install pymobiledevice3 (ou pip install -e 'engine[ios]')")
+          "uv tool install --python 3.12 pymobiledevice3")
     try:
         httpx.get("http://127.0.0.1:49151/", timeout=3)
         tunneld = True
@@ -141,7 +141,7 @@ def cmd_farm_doctor(args) -> int:
         tunneld = False
     check("tunneld (iOS 17+ : captures, mode développeur)", tunneld,
           "sudo pymobiledevice3 remote tunneld  (à lancer au démarrage, voir ops/)")
-    check("Appium", shutil.which("appium") is not None, "npm install -g appium")
+    check("Appium", shutil.which("appium") is not None, "npm install -g appium  (Node dans ~/.local/node, voir docs/ferme-iphone.md)")
     drivers = ""
     if shutil.which("appium"):   # appium écrit cette liste sur stderr selon les versions
         p = subprocess.run(["appium", "driver", "list", "--installed"], capture_output=True, text=True, timeout=60)

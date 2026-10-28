@@ -36,14 +36,17 @@ Le back (`engine/`, FastAPI) et le front (`web/`, React + Vite) sont séparés :
 sudo xcode-select -s /Applications/Xcode.app
 xcodebuild -runFirstLaunch
 
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install node python@3.12 pipx ffmpeg
-pipx install pymobiledevice3
+# Sans Homebrew ni mot de passe (méthode utilisée sur le Mac de la ferme le 29/10/2026) :
+#   Node LTS depuis nodejs.org dans ~/.local/node (somme SHA-256 vérifiée), ajouté au PATH dans ~/.zshrc
+#   uv (astral.sh) dans ~/.local/bin, puis Python et pymobiledevice3 :
+curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh
+uv python install 3.12
+uv tool install --python 3.12 pymobiledevice3
 npm install -g appium
 appium driver install xcuitest
 appium driver doctor xcuitest        # doit être vert sur les points obligatoires
 
-cd engine && python3.12 -m venv .venv && source .venv/bin/activate && pip install -e '.[ios]' && cd ..
+cd engine && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e '.[dev,ios]' && cd ..
 cd web && npm ci && npm run build && cd ..
 cp config/devices.example.yaml config/devices.yaml
 cp config/settings.example.yaml config/settings.yaml
