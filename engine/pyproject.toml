@@ -13,6 +13,10 @@ dependencies = [
   "httpx>=0.27",
   "pyyaml>=6",
   "pydantic>=2.7",
+  "anthropic>=2.3",
+  "python-multipart>=0.0.9",
+  "pillow>=11",
+  "beautifulsoup4>=4.12",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +26,9 @@ dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
 include = ["loopcast*"]
+
+[tool.setuptools.package-data]
+loopcast = ["migrations/*.sql", "prompts/*.md", "knowledge/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

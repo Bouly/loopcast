@@ -47,6 +47,8 @@ class PhoneConfig:
     owner: str = ""
     lang: str = "fr"
     slot: int = 0                           # index dans devices.yaml, sert à attribuer les ports
+    apps: list[str] = field(default_factory=list)          # apps promues par ce téléphone (`brands`)
+    accounts: dict[str, dict] = field(default_factory=dict)  # {tiktok: {handle, created, channel}, …}
 
 
 @dataclass
@@ -55,6 +57,7 @@ class Config:
     settings: dict[str, Any]
     farm: FarmSettings
     phones: list[PhoneConfig] = field(default_factory=list)
+    defaults: dict[str, Any] = field(default_factory=dict)  # `defaults` de devices.yaml (fuseau, créneaux…)
 
     @property
     def data_dir(self) -> Path:
@@ -78,7 +81,9 @@ def load(root: Path | None = None) -> Config:
     settings = _load_yaml("settings")
     devices = _load_yaml("devices")
     phones = [
-        PhoneConfig(id=d["id"], udid=d.get("udid"), owner=d.get("owner") or "", lang=d.get("lang", "fr"), slot=i)
+        PhoneConfig(id=d["id"], udid=d.get("udid"), owner=d.get("owner") or "", lang=d.get("lang", "fr"), slot=i,
+                    apps=list(d.get("apps") or d.get("brands") or []), accounts=dict(d.get("accounts") or {}))
         for i, d in enumerate(devices.get("devices") or [])
     ]
-    return Config(root=ROOT, settings=settings, farm=FarmSettings.from_dict(settings.get("farm") or {}), phones=phones)
+    return Config(root=ROOT, settings=settings, farm=FarmSettings.from_dict(settings.get("farm") or {}), phones=phones,
+                  defaults=dict(devices.get("defaults") or {}))

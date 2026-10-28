@@ -58,7 +58,14 @@ def create_app(
     controller: PhoneController | None = None,
     supervise: bool = False,
     web_dist: Path | None = None,
+    services: dict | None = None,
+    run_jobs: bool = False,
+    db_path: Path | str | None = None,
 ) -> FastAPI:
+    """`run_jobs` : lance les exécutants de la file de tâches (le pipeline) avec le serveur."""
+    from loopcast import jobs, modules
+
+    modules.load_all()
     controller = controller or PhoneController(config, conn)
     bus = EventBus()
     supervisor = Supervisor(config, conn, backend)
@@ -88,10 +95,25 @@ def create_app(
             threading.Thread(target=supervise_loop, name="supervision", daemon=True).start()
             threading.Thread(target=screens.run_forever, args=(stop, config.farm.thumb_seconds),
                              name="captures", daemon=True).start()
+        if run_jobs:
+            jobs_cfg = config.settings.get("jobs") or {}
+            jobs.run_worker(str(app.state.db_path), config, stop, services=app.state.services,
+                            threads=int(jobs_cfg.get("threads", 3)), limits=jobs_cfg.get("limits") or {})
         yield
         stop.set()
 
     app = FastAPI(title="Loopcast", lifespan=lifespan)
+    # État partagé avec les routes des modules (loopcast/api/deps.py).
+    app.state.config = config
+    app.state.conn = conn
+    app.state.db_path = str(db_path) if db_path else str(config.db_path)
+    app.state.bus = bus
+    app.state.services = services if services is not None else modules.services(config)
+    from loopcast.api.core import router as core_router
+
+    app.include_router(core_router)
+    for router in modules.routers():
+        app.include_router(router)
 
     def known(udid: str) -> dict:
         row = conn.execute("SELECT * FROM phones WHERE udid=?", (udid,)).fetchone()

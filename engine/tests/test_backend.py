@@ -48,4 +48,6 @@ def test_migrations_are_idempotent(tmp_path):
     path = tmp_path / "x.db"
     db.connect(path).close()
     conn = db.connect(path)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == len(db.MIGRATIONS)
+    applied = {r[0] for r in conn.execute("SELECT name FROM schema_migrations")}
+    assert applied == {p.stem for p in db.migration_files()}
+    assert db.migrate(conn) == []
