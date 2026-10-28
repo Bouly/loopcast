@@ -1,3 +1,7 @@
+import { AppDetailPage, AppsPage } from "./features/apps/AppsPage";
+import { CalendarPage } from "./features/calendar/CalendarPage";
+import { ProductionPage } from "./features/production/ProductionPage";
+import { ReviewPage } from "./features/review/ReviewPage";
 import { useOnline } from "./live";
 import { FarmPage } from "./pages/FarmPage";
 import { Placeholder } from "./pages/Placeholder";
@@ -14,13 +18,12 @@ const SECTIONS = [
 
 function Page({ path }: { path: string }) {
   if (path === "/" || match("/ferme", path)) return <FarmPage />;
-  if (match("/apps", path) || match("/apps/:id", path))
-    return <Placeholder title="Apps" text="Ajouter une app, la faire comprendre à Loopcast, répondre à ses questions." />;
-  if (match("/validation", path))
-    return <Placeholder title="Validation" text="Les vidéos prêtes, à garder ou à jeter." />;
-  if (match("/calendrier", path)) return <Placeholder title="Calendrier" text="Les publications prévues, compte par compte." />;
-  if (match("/production", path))
-    return <Placeholder title="Production" text="Ce que le pipeline est en train de faire, les erreurs et les coûts." />;
+  if (match("/apps", path)) return <AppsPage />;
+  const app = match("/apps/:id", path) ?? match("/apps/:id/:tab", path);
+  if (app) return <AppDetailPage id={app.id} />;
+  if (match("/validation", path)) return <ReviewPage />;
+  if (match("/calendrier", path)) return <CalendarPage />;
+  if (match("/production", path)) return <ProductionPage />;
   return <Placeholder title="Page introuvable" text="Cette adresse ne correspond à aucune section." />;
 }
 
