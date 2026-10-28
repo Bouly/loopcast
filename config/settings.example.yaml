@@ -27,10 +27,26 @@ budget:                          # plafonds en $ ; au-delà, les générations a
   daily_usd_per_app: 15
   monthly_usd: 600
 
+providers:                       # générateurs vidéo et image IA (engine/loopcast/providers, docs/fournisseurs-video.md)
+  demo: false                    # true : faux fournisseur (vidéos fabriquées localement) même avec une clé
+  fal: {keychain_service: loopcast-fal, timeout_s: 30}   # clé : FAL_KEY ou trousseau macOS, jamais ici
+  video:
+    default_quality: standard    # eco | standard | premium (le routeur descend d'un niveau près des plafonds)
+    poll_initial_s: 10           # premier sondage, puis × 1,5 jusqu'à poll_max_s
+    poll_max_s: 60
+    max_wait_s: 1800             # au-delà : annulation et nouvel essai
+    max_failures: 3
+    max_mb: 300
+    models: []                   # surcharges du catalogue par id, ex. {id: h3-max-768p, usd_per_s: 0.08}
+    disabled: []                 # modèles écartés, ex. [kling3-pro]
+  image:
+    default_quality: standard
+
 jobs:
   threads: 3                     # exécutants de la file de tâches
   limits:                        # tâches simultanées par famille
     "video.": 2
+    "image.": 2
     "content.render": 1
     "content.compose": 1
 

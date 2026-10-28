@@ -186,6 +186,14 @@ def test_ios_auto_mode_presses_publish_but_not_for_ai_content(tmp_path, conn):
     assert not any("Partager" in c for c in wda.clicked())
 
 
+def test_ios_auto_mode_leaves_the_mandatory_disclosures_to_a_human(tmp_path, conn):
+    """TikTok exige « Votre marque » pour sa propre app : tant que le parcours ne l'active pas, un humain publie."""
+    pub, wda, _runner, video = ios_setup(tmp_path, conn, mode="auto")
+    res = pub.publish(account("ios_app", "tiktok"), item(files=[str(video)], ai_label=False), [video])
+    assert res.status == "needs_human" and "Votre marque" in res.log
+    assert not {"Publier", "Post"} & set(wda.clicked())        # le bouton final n'est jamais touché
+
+
 def test_ios_failure_keeps_a_screenshot(tmp_path, conn):
     pub, _wda, _runner, video = ios_setup(tmp_path, conn, absent=("Pas maintenant", "Importer"))
     res = pub.publish(account("ios_app"), item(files=[str(video)]), [video])

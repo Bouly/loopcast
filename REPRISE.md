@@ -36,7 +36,9 @@ Ces règles protègent les comptes ET les apps qu'on promeut : les systèmes ant
 - **Pas de warmup automatisé** (bots qui scrollent, likent, suivent ou commentent pour imiter un humain) et **aucune action d'engagement automatisée** : pas de likes/commentaires/follows entre nos comptes, pas de faux avis store, pas de faux installs. Le code ne publie que nos propres contenus sur nos propres comptes.
 - **Création de comptes : manuelle**, une par téléphone, avec une vraie personne derrière qui utilise le téléphone normalement.
 - **Contenu unique par compte** : un même contenu ne part jamais sur deux comptes TikTok (il peut aller sur le TikTok ET l'Instagram du même téléphone).
-- **Label IA** : activer le label « contenu généré par IA » (paramètre API ou option dans l'app) dès qu'un format montre des visages, voix ou scènes réalistes générés. Les 4 formats actuels (texte/UI) n'en ont pas besoin.
+- **Label IA** : activer le label « contenu généré par IA » (paramètre API ou option dans l'app) dès qu'un format montre des visages, voix ou scènes réalistes générés, voix off de synthèse comprise. Les formats texte/UI n'en ont pas besoin.
+- **Pas de faux consommateur** (ajouté le 29/10/2026, voir `engine/loopcast/knowledge/playbook.md` §4.2 et §6) : chaque compte est celui de l'app ou de son équipe et le dit dans sa bio ; jamais de témoignage, d'avis ou de résultat inventés ; un avatar IA parle au nom de la marque, jamais comme un client.
+- **Contenu commercial TikTok** : déclaration « Votre marque » sur chaque post qui promeut nos apps.
 - **Plafond dur** : 5 posts/jour/compte maximum dans le code, quel que soit le réglage.
 - **Secrets** : tokens OAuth chiffrés en base ou dans le trousseau macOS, jamais dans git.
 

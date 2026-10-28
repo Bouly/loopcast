@@ -368,8 +368,17 @@ class IosAppPublisher:
         if el is None:
             raise IosFlowError(f"bouton « {' / '.join(step.labels)} » introuvable à la fin du parcours")
         label = step.labels[0]
-        if self.settings.mode != "auto" or content.ai_label:
-            why = " Activer l'étiquette « contenu généré par IA » avant." if content.ai_label else ""
+        # Les déclarations obligatoires (TikTok : contenu commercial « Votre marque » pour sa propre app ;
+        # label IA) ne sont pas encore automatisées dans ce parcours : tant qu'elles ne le sont pas, un humain
+        # les active et appuie lui-même, même en mode auto (playbook §6).
+        disclosures_automated = False
+        if self.settings.mode != "auto" or content.ai_label or not disclosures_automated:
+            todo = []
+            if account.platform == "tiktok":
+                todo.append("activer « Contenu commercial › Votre marque »")
+            if content.ai_label:
+                todo.append("activer l'étiquette « contenu généré par IA »")
+            why = (" Avant de publier : " + " et ".join(todo) + ".") if todo else ""
             return PublishResult.needs_human(
                 f"Brouillon iPhone (non vérifié) : tout est prêt dans {account.platform} sur {account.device}, "
                 f"vérifier puis appuyer sur « {label} », et cliquer « Publié » dans Loopcast.{why}")

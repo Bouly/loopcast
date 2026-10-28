@@ -304,3 +304,14 @@ def test_unknown_kinds_never_block_known_ones(jconn, clock):
         jid = jobs.enqueue(jconn, "t.ok", clock=clock)
         assert jobs.run_one(jconn, None, "w", clock=clock).id == jid
         assert jconn.execute("SELECT COUNT(*) FROM jobs WHERE kind='module.absent' AND status='queued'").fetchone()[0] == 250
+
+
+def test_permanent_can_keep_a_result(jconn, clock):
+    def give_up(ctx, p):
+        raise jobs.Permanent("modèle introuvable", result={"handle": None, "tried": ["a", "b"]})
+
+    with handlers(t_giveup=(give_up, {})):
+        jid = jobs.enqueue(jconn, "t.giveup", clock=clock)
+        jobs.run_one(jconn, None, "w", clock=clock)
+        row = jconn.execute("SELECT status, result FROM jobs WHERE id=?", (jid,)).fetchone()
+        assert row["status"] == "dead" and json.loads(row["result"]) == {"handle": None, "tried": ["a", "b"]}

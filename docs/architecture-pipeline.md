@@ -41,7 +41,14 @@ App ajoutée ──► apps.ingest_source (App Store, site…)        ┐
   commentaires, réponses automatiques avec lien) ; création de comptes manuelle.
 - Un contenu ne part jamais sur deux comptes de la même plateforme (index unique `posts(content_id, platform)`) ;
   il peut aller sur le TikTok ET l'Instagram du même téléphone.
-- Label IA (`ai_label=1`) dès qu'un contenu montre des visages, voix ou scènes réalistes générés.
+- Label IA (`ai_label=1`) dès qu'un contenu montre des visages, voix ou scènes réalistes générés, voix off de
+  synthèse comprise : à la publication, `is_aigc` (TikTok) / `is_ai_generated` (Instagram).
+- **Pas de faux consommateur** (Code de la consommation, LCEN, FTC — playbook §4.2 et §6) : un compte est celui de
+  l'app ou de son équipe et le dit dans sa bio ; une « voix » est un angle éditorial, pas une fausse identité ;
+  jamais de témoignage, d'avis ou de résultat personnel inventés, et un avatar IA parle au nom de la marque,
+  jamais comme un client.
+- **TikTok, contenu commercial** : promouvoir sa propre app impose la déclaration « Votre marque » sur chaque post
+  (`brand_organic_toggle` par l'API). Tant qu'un parcours de publication ne l'active pas lui-même, un humain publie.
 - Plafond dur : 5 posts par jour et par compte, quel que soit le réglage.
 - Aucun secret dans git : clés dans l'environnement ou le trousseau macOS.
 - Budgets : toute dépense passe par `costs.check_budget` avant, et `costs.record` après.
@@ -106,6 +113,10 @@ l'intégration l'ajoute à `settings.example.yaml`.
   st = video.poll(handle)                    # → {"status": "queued|running|done|failed", "error": …}
   path = video.download(handle, dest_dir)    # → Path du .mp4 (1080×1920 visé)
   ```
+  Champs facultatifs ajoutés par le module : `humans` (personne réaliste à l'écran), `lang` (langue parlée si
+  `audio`), `model` (forcer un modèle) ; une image de départ doit être en 9:16 (une capture d'iPhone se pose
+  d'abord sur un fond 9:16). Le résultat de la tâche donne aussi `provider`, `duration_s` réel, durées demandée
+  et facturée. Enfiler `video.generate` avec `app_id` pour que le plafond par app s'applique.
   La tâche `video.generate` (payload `{content_id, shot_index, request}`) fait submit → `RetryLater` tant
   que ça calcule → download → inscrit le coût réel ; `production` l'enfile et attend son résultat
   (`jobs.result` JSON `{path, cost_usd, model}`).

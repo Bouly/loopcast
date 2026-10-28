@@ -215,11 +215,13 @@ AI_HOOK_DEMO = formats.register(FormatSpec(
 
 UGC_AI = formats.register(FormatSpec(
     "ugc-ai", "video", "hybrid", STORY, "Personne générée qui parle face caméra + captures",
-    "Une personne générée par IA parle face caméra, comme une vidéo filmée au téléphone (témoignage, réaction, "
-    "astuce), puis on montre l'app sur ses vraies captures. Ce qu'elle dit est dans voiceover (langue du "
-    "compte, oral et naturel, une idée par plan) et s'affiche en sous-titres ; la personne, le décor et la "
-    "façon de filmer sont décrits dans prompt (en anglais). Le plus convaincant, mais le plus cher : label IA "
-    "obligatoire.",
+    "Une personne générée par IA parle face caméra, comme une vidéo filmée au téléphone (astuce, réaction, "
+    "explication), puis on montre l'app sur ses vraies captures. Elle parle AU NOM de l'app, comme une "
+    "présentatrice de la marque : jamais comme une cliente, jamais de témoignage, d'avis ou de résultat "
+    "personnel (« depuis que j'utilise… »), ce serait un faux consommateur, interdit (playbook §4.2, §6). Ce "
+    "qu'elle dit est dans voiceover (langue du compte, oral et naturel, une idée par plan) et s'affiche en "
+    "sous-titres ; la personne, le décor et la façon de filmer sont décrits dans prompt (en anglais). Le plus "
+    "convaincant, mais le plus cher : label IA obligatoire.",
     f"shots : 2 à 6 plans (total 12 à 35 s), {_SHOT_FIELDS}. shots[0] = ugc_avatar (3 à 10 s) ; 1 à 3 plans "
     "ugc_avatar en tout, avec voiceover ≤ 16 car. par seconde et prompt anglais décrivant la même personne "
     "à chaque plan (âge, style, lieu, lumière, selfie vertical) ; au moins un plan app_screenshot / "

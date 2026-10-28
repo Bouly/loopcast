@@ -52,7 +52,12 @@ class RetryLater(Exception):
 
 
 class Permanent(Exception):
-    """Échec définitif : inutile de réessayer (donnée invalide, clé absente, budget épuisé…)."""
+    """Échec définitif : inutile de réessayer (donnée invalide, clé absente, budget épuisé…).
+    `result` est gardé sur la tâche (état utile pour comprendre, ou pour qu'une relance reparte de zéro)."""
+
+    def __init__(self, message: str = "", result: dict | None = None):
+        super().__init__(message)
+        self.result = result
 
 
 # --- Déclaration des handlers --------------------------------------------------------------------
@@ -221,15 +226,17 @@ def retry_later(conn: sqlite3.Connection, job: Job, e: RetryLater, *, clock: Clo
 
 
 def fail(conn: sqlite3.Connection, job: Job, error: str, *, permanent: bool = False,
-         clock: Clock = utcnow, rng: random.Random | None = None) -> str:
+         clock: Clock = utcnow, rng: random.Random | None = None, result: dict | None = None) -> str:
     """Remet la tâche en file avec attente croissante, ou la passe en « dead ». Renvoie le statut."""
     now = clock()
     spec = HANDLERS.get(job.kind)
     if permanent or job.attempts >= job.max_attempts:
         conn.execute(
-            """UPDATE jobs SET status='dead', last_error=?, lease_until=NULL, updated_at=?, finished_at=?
+            """UPDATE jobs SET status='dead', last_error=?, lease_until=NULL, updated_at=?, finished_at=?,
+                      result=COALESCE(?, result)
                WHERE id=?""",
-            (error[-4000:], iso(now), iso(now), job.id),
+            (error[-4000:], iso(now), iso(now),
+             json.dumps(result, ensure_ascii=False) if result is not None else None, job.id),
         )
         _event(conn, now, "job_dead", f"{job.kind} #{job.id} abandonnée : {error.splitlines()[-1][:300]}")
         return "dead"
@@ -294,7 +301,7 @@ def run_one(conn: sqlite3.Connection, config: Any, worker: str, *, clock: Clock 
         retry_later(conn, job, e, clock=clock)
     except Permanent as e:
         _rollback(conn)
-        fail(conn, job, f"{type(e).__name__}: {e}", permanent=True, clock=clock)
+        fail(conn, job, f"{type(e).__name__}: {e}", permanent=True, clock=clock, result=e.result)
     except Exception as e:  # noqa: BLE001 : une tâche ne doit jamais faire tomber le worker
         _rollback(conn)
         log.warning("tâche %s #%s en échec : %s", job.kind, job.id, e)
