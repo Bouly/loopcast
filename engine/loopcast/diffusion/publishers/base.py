@@ -69,6 +69,20 @@ class ContentItem:
         return text[:CAPTION_MAX]
 
 
+def disclosure_steps(platform: str, ai_label: bool) -> list[str]:
+    """Les déclarations à activer avant de publier (REPRISE §3, docs/architecture-pipeline.md, garde-fous) :
+    - TikTok : « Contenu commercial › Votre marque » sur chaque post (nous promouvons notre propre app ;
+      `brand_organic_toggle` par l'API) ;
+    - contenu `ai_label` (visages, voix ou scènes réalistes générés) : l'étiquette « contenu généré par IA »,
+      sur TikTok (`is_aigc` par l'API) comme sur Instagram."""
+    steps = []
+    if platform == "tiktok":
+        steps.append("activer « Contenu commercial › Votre marque »")
+    if ai_label:
+        steps.append("activer l'étiquette « contenu généré par IA »")
+    return steps
+
+
 def _json_list(raw) -> list:
     if not raw:
         return []

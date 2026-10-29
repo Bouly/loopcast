@@ -11,14 +11,18 @@ TikTok — Content Posting API, https://open.tiktokapis.com, jeton utilisateur O
   valeur envoyée doit en faire partie), durée maximale, interactions désactivées.
 - Publication directe (canal api_direct), scope `video.publish` : POST /v2/post/publish/video/init/
   `{"post_info": {"title": légende ≤ 2200, "privacy_level": …, "disable_duet", "disable_comment",
-  "disable_stitch", "video_cover_timestamp_ms", "is_aigc": content.ai_label},
+  "disable_stitch", "video_cover_timestamp_ms", "brand_organic_toggle": true, "is_aigc": content.ai_label},
    "source_info": {"source": "PULL_FROM_URL", "video_url": …}}` (ou FILE_UPLOAD : video_size, chunk_size,
   total_chunk_count, puis PUT sur `upload_url`, valable 1 h) → `publish_id`.
+  `brand_organic_toggle` = la déclaration « Contenu commercial › Votre marque », OBLIGATOIRE sur chaque post :
+  nous promouvons notre propre app (garde-fou de docs/architecture-pipeline.md ; nom du champ à revérifier
+  au moment de brancher). Sans elle, pas de publication directe : repli manuel.
   Tant que l'app n'est pas auditée par TikTok, tout ce qu'elle publie reste PRIVÉ.
 - Brouillon (canal api_draft), scope `video.upload` : POST /v2/post/publish/inbox/video/init/
   `{"source_info": {...}}` → `publish_id` ; la vidéo arrive dans la boîte de réception TikTok du compte,
-  la personne finit le post dans l'app → statut `needs_human`. Limites : 6 requêtes/min par jeton,
-  au plus 5 partages en attente sur 24 h.
+  la personne finit le post dans l'app → statut `needs_human`, avec les consignes de
+  base.disclosure_steps() (« Contenu commercial › Votre marque », étiquette IA si `ai_label`), comme
+  ManualPublisher. Limites : 6 requêtes/min par jeton, au plus 5 partages en attente sur 24 h.
 - Suivi : POST /v2/post/publish/status/fetch/ `{"publish_id"}` → status (PROCESSING_UPLOAD,
   PROCESSING_DOWNLOAD, SEND_TO_USER_INBOX, PUBLISH_COMPLETE, FAILED) et, une fois public,
   `publicaly_available_post_id` (orthographe de l'API) = l'id de la vidéo.
@@ -42,7 +46,8 @@ professionnel, permissions `instagram_business_basic`, `instagram_business_conte
 - Métriques : GET /<IG_MEDIA_ID>/insights?metric=views,likes,comments,shares,saved,reach
   (`impressions` est abandonnée pour les médias publiés après le 02/07/2024).
 - Label IA : pas de paramètre de publication trouvé dans la doc de l'API ; à vérifier avant de publier
-  un contenu `ai_label` par API (sinon : canal manuel pour ces contenus).
+  un contenu `ai_label` par API (sinon : canal manuel pour ces contenus, dont les consignes rappellent
+  d'activer l'étiquette « contenu généré par IA »).
 """
 
 from __future__ import annotations
@@ -99,9 +104,11 @@ class TikTokPublisher(_ApiSkeleton):
 
     # Parcours prévu de publish() :
     #   1. media → URL publique temporaire (storage.py, domaine vérifié chez TikTok)
-    #   2. direct : _creator_info() puis _init_direct_post() ; inbox : _init_inbox_upload()
+    #   2. direct : _creator_info() puis _init_direct_post() (brand_organic_toggle = true : « Votre marque »,
+    #      is_aigc = content.ai_label) ; inbox : _init_inbox_upload()
     #   3. _fetch_status(publish_id) jusqu'à PUBLISH_COMPLETE (direct → posted, external_id =
-    #      publicaly_available_post_id) ou SEND_TO_USER_INBOX (inbox → needs_human)
+    #      publicaly_available_post_id) ou SEND_TO_USER_INBOX (inbox → needs_human, consignes :
+    #      base.disclosure_steps(account.platform, content.ai_label))
     #   4. supprimer le fichier du stockage objet
     # fetch_metrics() : _query_videos(external_ids) par paquets de 20.
 
@@ -109,7 +116,8 @@ class TikTokPublisher(_ApiSkeleton):
         raise NotImplementedError("POST /v2/post/publish/creator_info/query/")
 
     def _init_direct_post(self, token: str, content: ContentItem, video_url: str, privacy_level: str) -> str:
-        raise NotImplementedError("POST /v2/post/publish/video/init/ (post_info.is_aigc = content.ai_label)")
+        raise NotImplementedError("POST /v2/post/publish/video/init/ (post_info.brand_organic_toggle = true, "
+                                  "post_info.is_aigc = content.ai_label)")
 
     def _init_inbox_upload(self, token: str, video_url: str) -> str:
         raise NotImplementedError("POST /v2/post/publish/inbox/video/init/")

@@ -65,7 +65,7 @@ from urllib.parse import quote, urlencode
 import httpx
 
 from loopcast.accounts import Account
-from loopcast.diffusion.publishers.base import ContentItem, Metrics, PublishResult
+from loopcast.diffusion.publishers.base import ContentItem, Metrics, PublishResult, disclosure_steps
 from loopcast.diffusion.settings import IosAppSettings
 
 VERIFIED = False          # passera à True quand un parcours complet aura été fait sur un vrai iPhone
@@ -373,11 +373,7 @@ class IosAppPublisher:
         # les active et appuie lui-même, même en mode auto (playbook §6).
         disclosures_automated = False
         if self.settings.mode != "auto" or content.ai_label or not disclosures_automated:
-            todo = []
-            if account.platform == "tiktok":
-                todo.append("activer « Contenu commercial › Votre marque »")
-            if content.ai_label:
-                todo.append("activer l'étiquette « contenu généré par IA »")
+            todo = disclosure_steps(account.platform, content.ai_label)
             why = (" Avant de publier : " + " et ".join(todo) + ".") if todo else ""
             return PublishResult.needs_human(
                 f"Brouillon iPhone (non vérifié) : tout est prêt dans {account.platform} sur {account.device}, "
