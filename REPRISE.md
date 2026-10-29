@@ -281,7 +281,7 @@ Par compte, recalculé chaque heure, stocké dans `account_state` avec une **not
 4. Stock < `stock_target` pour un compte : générer + rendre (si clé API), puis valider selon `review_mode`.
 5. Rafraîchir les tokens OAuth qui expirent ; alerter si un compte doit être reconnecté.
 6. Notifications (`notify.py`) : brouillon TikTok à finir, échec répété, compte en pause, token expiré, stock bas sans clé API. macOS (`osascript`) + push sur les iPhones de l'équipe (ntfy ou Pushover).
-7. `--once` pour un seul tour, `--dry-run` = FakePublisher.
+7. `--once` pour un seul tour. `diffusion.dry_run: true` = essai à blanc : les posts passent au statut `dry_run` avec ce qui serait parti, sans rien publier ni consommer (le FakePublisher sert aux tests et à la démo, qui a sa propre base `data/demo.db`).
 
 Lancement permanent : `ops/com.loopcast.autopilot.plist` dans `~/Library/LaunchAgents/` (KeepAlive, logs dans `data/logs/`), et `caffeinate -s` pour éviter la veille.
 
@@ -317,22 +317,26 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 
 ## 8. Liste de tâches
 
-- [x] Moteur de rendu Remotion + 4 formats FR/EN, testés
+État au 29/10/2026 au matin (branche `nuit/apps-strategie`, architecture : `docs/architecture-pipeline.md`).
+
+- [x] Moteur de rendu Remotion + 4 formats FR/EN, testés ; composition `story` (IA + vraies captures + carte de fin)
 - [x] Fichiers d'exemple : marque, iPhones, réglages
-- [ ] Démarches plateformes : app TikTok + audit, app Meta, bucket + domaine
+- [ ] Démarches plateformes : app TikTok + audit, app Meta, bucket + domaine (attention : les règles de TikTok refusent la
+      publication directe « pour ses propres comptes ou ceux de son équipe », voir `docs/strategie/sources.md` §10)
 - [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — validé sur un iPhone 14 Pro Max le 29/10/2026
-- [x] `engine/` : config, DB (schéma §5.1 + table `phones`), CLI (`serve`, `farm list|watch|screenshot|doctor`)
-- [ ] `engine/` : formats
-- [ ] Génération LLM + contenus seed
-- [ ] Rendu piloté depuis Python + QA auto
-- [ ] API FastAPI + front React : écrans validation, à finir, comptes, calendrier (l'écran Ferme existe)
-- [ ] Stockage objet + Publisher Instagram
-- [ ] Publisher TikTok (brouillon, puis direct après audit)
-- [ ] Planification + régulateur + worker
-- [ ] Métriques + boucle des gagnants
-- [ ] Autopilote + launchd + notifications
-- [ ] Tests
-- [ ] (Plan B seulement) Publisher iPhone via Appium
+- [x] `engine/` : config, DB (migrations en fichiers), file de tâches durable, coûts et plafonds, CLI
+- [x] `engine/` : formats (catalogue, validation, 4 formats Remotion + 4 formats à plans)
+- [x] Génération LLM : compréhension de l'app (fiche + questions), stratégie (une voix par téléphone), idées validées — démo testée, **vrai Claude pas encore essayé (pas de clé)**
+- [x] Rendu piloté depuis Python + QA auto (durée, format, poids, images noires ou figées)
+- [x] Générateurs vidéo IA (fal.ai + faux fournisseur, routage par budget) — **pas encore essayés en vrai (pas de clé)**
+- [x] API FastAPI + front React : Apps, Validation, Calendrier, Production, Ferme
+- [ ] Stockage objet + Publisher Instagram (squelette documenté seulement)
+- [ ] Publisher TikTok (squelette documenté ; en attendant : canal manuel « à finir »)
+- [x] Planification + régulateur + exécution des posts (3 par jour et par compte après montée en charge, plafond 5)
+- [x] Métriques (saisie manuelle) + boucle des gagnants
+- [x] Autopilote + chien de garde + notifications ; [ ] services launchd du pipeline (ceux de la ferme existent)
+- [x] Tests (environ 390, tous verts, sans réseau ni clé)
+- [ ] Publisher iPhone via Appium : écrit, **non vérifié**, désactivé (raccourci iOS « Loopcast Import » à créer)
 
 ## 9. Marché US : la voie qui tient
 
