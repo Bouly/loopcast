@@ -43,6 +43,15 @@ _DOC_EXT = {".pdf": "application/pdf", ".txt": "text/plain", ".md": "text/markdo
             ".key": "application/x-iwork-keynote-sffkey", ".pages": "application/x-iwork-pages-sffpages",
             ".rtf": "application/rtf"}
 TEXT_MIMES = ("text/plain", "text/markdown", "text/csv", "application/json")
+# Affichés dans le navigateur : seulement les images matricielles et les vidéos, qui ne peuvent pas exécuter de
+# script. Le reste (HTML, SVG, PDF, textes…) part en téléchargement : servi sur la même origine que l'API, un
+# .html ou un .svg téléversé pourrait sinon agir dans le dashboard à la place de l'équipe.
+INLINE_MIMES = frozenset(mime for _ext, mime in _IMAGE_FORMATS.values()) | frozenset(_VIDEO_EXT.values())
+
+
+def served_inline(mime: str | None) -> bool:
+    """Ce type de fichier peut-il s'afficher dans le navigateur (sinon : Content-Disposition: attachment) ?"""
+    return (mime or "").split(";")[0].strip().lower() in INLINE_MIMES
 
 
 # --- Emplacements --------------------------------------------------------------------------------------
