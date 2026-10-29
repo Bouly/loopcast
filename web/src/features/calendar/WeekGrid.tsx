@@ -2,7 +2,7 @@ import { memo, useContext, useMemo } from "react";
 import type { Account, Calendar, CalendarAccount, Post } from "./api";
 import { shortDate, weekDays, weekdayShort } from "./dates";
 import { accountDetail, accountTitle, capitalize as cap, platformName, postProblem, sortAccounts, viewsLabel } from "./model";
-import { AccountStateTag, FormatTitleContext, PlatformIcon, PostState, postTitle, Thumb } from "./parts";
+import { AccountStateTag, Dot, FormatTitleContext, PlatformIcon, PostState, postTitle, Thumb } from "./parts";
 
 export type OpenAccount = (accountId: string, postId?: number) => void;
 
@@ -147,8 +147,15 @@ export function PostChip({ post, onOpen }: { post: Post; onOpen: () => void }) {
       <span className="cal-post-text">
         <span className="cal-post-time">{post.local_time ?? "--:--"}</span>
         <span className="cal-post-title">{title}</span>
-        <PostState post={post} />
-        {post.status === "posted" && post.views !== null && <span className="cal-post-views">{viewsLabel(post.views, true)}</span>}
+        {/* Publié avec ses vues : la pastille verte et le nombre de vues disent tout, sur une seule ligne */}
+        {post.status === "posted" && post.views !== null ? (
+          <span className="cal-state" title="Publié">
+            <Dot tone="ok" />
+            {viewsLabel(post.views, true)}
+          </span>
+        ) : (
+          <PostState post={post} />
+        )}
       </span>
     </button>
   );

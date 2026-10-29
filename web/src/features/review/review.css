@@ -1,38 +1,54 @@
 /* Validation : une vidéo à la fois, en 9:16, à garder ou à jeter.
    Mêmes jetons et mêmes classes que la ferme (styles.css) ; ce fichier n'ajoute que ce qui manque,
-   préfixé rv-. Aucune couleur en dur : les voiles sur la vidéo dérivent de --screen et --brand-foreground. */
+   préfixé rv-. Aucune couleur en dur : les voiles sur la vidéo dérivent de --screen et --on-screen. */
 
 .rv-page {
-  /* Largeur de la carte : la plus grande qui tient dans l'écran avec la barre de décision. */
-  --rv-card-w: clamp(240px, calc((100vh - 324px) * 9 / 16), 420px);
+  /* Largeur de la vidéo : la plus grande qui tient dans l'écran avec sa légende, comme dans une app de vidéos
+     courtes (barre du haut 65 px, marge 20 px, légende sur trois lignes ~115 px, marge basse 24 px). */
+  --rv-card-w: clamp(260px, calc((100vh - 224px) * 9 / 16), 470px);
   --rv-veil: color-mix(in srgb, var(--screen) 58%, transparent);
   --rv-veil-strong: color-mix(in srgb, var(--screen) 80%, transparent);
   --rv-veil-solid: color-mix(in srgb, var(--screen) 94%, transparent);
-  --rv-on-dark: var(--brand-foreground);
-  --rv-on-dark-muted: color-mix(in srgb, var(--brand-foreground) 72%, transparent);
+  --rv-on-dark: var(--on-screen);
+  --rv-on-dark-muted: color-mix(in srgb, var(--on-screen) 72%, transparent);
 }
 @supports (height: 100dvh) {
-  .rv-page { --rv-card-w: clamp(240px, calc((100dvh - 324px) * 9 / 16), 420px); }
+  .rv-page { --rv-card-w: clamp(260px, calc((100dvh - 224px) * 9 / 16), 470px); }
 }
 
-/* ---------- Scène : la carte à gauche, ce qu'il faut savoir à droite ---------- */
+/* ---------- Scène « Fil » : la file à gauche, la vidéo et ses boutons au centre, la ferme à droite ---------- */
 
+.rv-fil { padding-top: 20px; }
 .rv-stage {
   display: grid;
-  grid-template-columns: var(--rv-card-w) minmax(0, 1fr);
-  gap: 28px;
+  grid-template-columns: minmax(210px, 270px) auto minmax(250px, 340px);
+  grid-template-areas: "left center right";
+  justify-content: center;
+  column-gap: 48px;
+  row-gap: 36px;
   align-items: start;
 }
-.rv-left {
+.rv-aside-l { grid-area: left; }
+/* La vidéo, sa colonne de boutons calée sur son bas (comme dans les apps de vidéos), la légende dessous */
+.rv-center {
+  grid-area: center;
   display: grid;
-  gap: 10px;
-  width: var(--rv-card-w);
+  grid-template-columns: var(--rv-card-w) auto;
+  grid-template-areas: "card rail" "cap ." "hint .";
+  column-gap: 22px;
+  row-gap: 14px;
+  align-items: start;
   min-width: 0;
 }
+.rv-center > .rv-left { display: contents; }
+.rv-center .rv-card-slot, .rv-center .rv-empty { grid-area: card; }
+.rv-center .rv-cap { grid-area: cap; }
+.rv-center .rv-decide-hint { grid-area: hint; }
+.rv-aside-r { grid-area: right; }
 
-/* La colonne de la carte reste en vue pendant qu'on lit le panneau, si l'écran est assez haut pour elle */
+/* La vidéo et ses boutons restent en vue pendant qu'on lit les détails, si l'écran est assez haut */
 @media (min-width: 961px) and (min-height: 620px) {
-  .rv-left { position: sticky; top: 68px; }
+  .rv-center { position: sticky; top: 85px; }
 }
 
 /* ---------- La carte (vidéo ou carrousel) ---------- */
@@ -43,9 +59,7 @@
   width: 100%;
   aspect-ratio: 9 / 16;
   border-radius: var(--r-2xl);
-  border: 1px solid var(--bezel);
   background: var(--screen);
-  box-shadow: var(--el-rest);
   overflow: hidden;
   touch-action: pan-y;
   user-select: none;
@@ -180,7 +194,7 @@
   width: 100%;
   height: 3px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--brand-foreground) 28%, transparent);
+  background: color-mix(in srgb, var(--on-screen) 28%, transparent);
   overflow: hidden;
   transition: height 120ms var(--ease);
 }
@@ -231,27 +245,54 @@
   to { transform: translateX(calc(var(--from, 0) * 1px - 70%)) rotate(-9deg); opacity: 0; }
 }
 
-/* Sous la carte : position dans la file, et sur téléphone le contrôle et le label IA */
-.rv-cap {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 22px;
-  font-size: 12.5px;
-  color: var(--muted-foreground);
+/* Sous la vidéo : le compte, la légende telle qu'elle partira, l'essentiel en une ligne */
+.rv-cap { display: grid; gap: 5px; min-width: 0; }
+.rv-cap p { margin: 0; overflow-wrap: anywhere; }
+.rv-cap-who { font-size: 16px; line-height: 1.35; }
+.rv-cap-who strong { font-weight: 700; }
+.rv-cap-who span { color: var(--muted-foreground); font-weight: 500; }
+.rv-cap-text {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--soft-foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.rv-cap-facts { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.state.rv-qa-chip { font-size: 12.5px; color: var(--foreground); }
+.rv-cap-meta { font-size: 14px; line-height: 1.45; color: var(--muted-foreground); text-wrap: pretty; }
+.rv-warn { color: var(--warn); }
 
-/* ---------- Décider ---------- */
+/* ---------- Décider : une colonne de boutons ronds à droite de la vidéo, comme dans les apps de vidéos ---------- */
 
-.rv-decide { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.btn.rv-big { width: 100%; height: 36px; gap: 7px; padding: 0 10px; }
-.rv-big .rv-kbd:first-child { margin-right: 2px; }
-.rv-big .rv-kbd:last-child { margin-left: 2px; }
-.rv-decide .btn.skeleton { border-color: var(--border); box-shadow: none; }
-.rv-reject-anchor { position: relative; display: block; min-width: 0; }
+.rv-rail { grid-area: rail; align-self: end; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.rv-act { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.rv-act-btn {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--foreground) 11%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 120ms var(--ease), transform 120ms var(--ease);
+}
+.rv-act-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 18%, transparent); }
+.rv-act-btn:active:not(:disabled) { transform: scale(0.96); }
+.rv-act-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.rv-act-btn:disabled { opacity: 0.35; cursor: default; }
+.rv-act-btn.keep { width: 74px; height: 74px; background: var(--keep); color: var(--keep-foreground); }
+.rv-act-btn.keep:hover:not(:disabled) { background: var(--keep-hover); }
+.rv-act-btn.small { width: 52px; height: 52px; background: color-mix(in srgb, var(--foreground) 7%, transparent); }
+.rv-act-label { font-size: 13.5px; font-weight: 600; }
+.rv-act-label.soft { color: var(--soft-foreground); }
+.rv-act-btn.small[aria-pressed="true"] { background: var(--foreground); color: var(--background); }
+/* Sous chaque bouton, sa touche en clair, sans cadre */
+.rv-act .rv-kbd { height: auto; min-width: 0; margin-top: -3px; padding: 0; border: 0; background: none; font-size: 12px; }
+.rv-reject-anchor { position: relative; min-width: 0; }
 
 .rv-kbd {
   display: inline-flex;
@@ -272,7 +313,7 @@
 .btn.primary .rv-kbd {
   background: transparent;
   border-color: color-mix(in srgb, var(--brand-foreground) 30%, transparent);
-  color: var(--rv-on-dark-muted, var(--brand-foreground));
+  color: color-mix(in srgb, var(--brand-foreground) 72%, transparent);
 }
 .rv-keys {
   display: flex;
@@ -286,18 +327,142 @@
 .rv-keys > span { display: inline-flex; align-items: center; gap: 4px; }
 /* Pourquoi on ne peut pas décider maintenant (légende en cours, vidéo illisible) : visible aussi sur téléphone */
 .rv-decide-hint {
-  grid-column: 1 / -1;
-  margin: 0 0 2px;
-  font-size: 12.5px;
-  line-height: 1.4;
-  text-align: center;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--warn);
+}
+
+/* Raisons du rejet : menu à côté du bouton (bureau), au-dessus ou en dessous ailleurs, feuille en bas (téléphone) */
+.rv-pop-above, .rv-pop-below, .rv-pop-side { position: absolute; z-index: 30; width: min(340px, calc(100vw - 32px)); }
+.rv-pop-above { bottom: calc(100% + 8px); left: 0; }
+.rv-pop-below { top: calc(100% + 6px); right: 0; }
+.rv-pop-side { top: -8px; left: calc(100% + 14px); }
+
+/* ---------- Autour de la vidéo : les sections communes (.sec, styles.css), sans cadre ---------- */
+
+.rv-aside { display: grid; gap: 26px; align-content: start; min-width: 0; padding-top: 4px; }
+
+/* Aujourd'hui : l'heure en gros, le compte, où en est le post */
+.rv-day { gap: 4px; }
+.rv-day-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 0 -8px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  color: var(--foreground);
+  text-decoration: none;
+  transition: background 120ms var(--ease);
+}
+.rv-day-row:hover { background: var(--muted); }
+.rv-day-row:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
+.rv-day-time { font-size: 15px; font-weight: 700; }
+.rv-day-text { display: grid; min-width: 0; }
+.rv-day-text strong { font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-day-text span { font-size: 13.5px; color: var(--soft-foreground); }
+.rv-day-row.warn .rv-day-time, .rv-day-row.warn .rv-day-text span { color: var(--warn); }
+.rv-day-row.bad .rv-day-time, .rv-day-row.bad .rv-day-text span { color: var(--destructive); }
+.rv-day-row.done .rv-day-time, .rv-day-row.done .rv-day-text span { color: var(--muted-foreground); }
+
+/* Ensuite : les vidéos suivantes en vignettes 9:16 */
+.rv-queue { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.rv-queue-item {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--muted);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 120ms var(--ease), opacity 120ms var(--ease);
+}
+.rv-queue-item img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.rv-queue-item:hover { transform: translateY(-2px); }
+.rv-queue-item:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.rv-queue-more {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 9 / 16;
+  border-radius: var(--r-md);
+  background: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
   color: var(--muted-foreground);
 }
 
-/* Raisons du rejet : menu au-dessus du bouton (bureau), feuille en bas d'écran (téléphone) */
-.rv-pop-above, .rv-pop-below { position: absolute; z-index: 30; width: min(340px, calc(100vw - 32px)); }
-.rv-pop-above { bottom: calc(100% + 8px); left: 0; }
-.rv-pop-below { top: calc(100% + 6px); right: 0; }
+/* Les iPhones : un mur en miniature, l'écran de chacun, celui qui recevra la vidéo entouré */
+.rv-phones { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.rv-phone { display: grid; justify-items: center; gap: 6px; color: var(--foreground); text-decoration: none; }
+.rv-phone-screen {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 19.5;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--bezel);
+  transition: transform 120ms var(--ease);
+}
+.rv-phone-screen img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+/* L'îlot de l'iPhone : un détail qui suffit à lire « téléphone » plutôt que « rectangle » */
+.rv-phone-screen::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 32%;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--screen);
+  transform: translateX(-50%);
+}
+.rv-phone:hover .rv-phone-screen { transform: translateY(-2px); }
+.rv-phone:focus-visible { outline: none; }
+.rv-phone:focus-visible .rv-phone-screen { outline: 2px solid var(--ring); outline-offset: 3px; }
+.rv-phone-n { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rv-phone.target .rv-phone-screen { box-shadow: 0 0 0 2px var(--keep); }
+.rv-phone.attention .rv-phone-screen { box-shadow: 0 0 0 2px var(--warn); }
+.rv-phone.attention .rv-phone-n { color: var(--warn); }
+.rv-phone.offline .rv-phone-screen { box-shadow: 0 0 0 2px var(--destructive); }
+.rv-phone.offline .rv-phone-n { color: var(--destructive); }
+.rv-phone.never_seen, .rv-phone.unknown { opacity: 0.5; }
+.rv-phone.never_seen .rv-phone-screen, .rv-phone.unknown .rv-phone-screen { background: var(--muted); }
+.rv-phone.never_seen .rv-phone-n, .rv-phone.unknown .rv-phone-n { color: var(--muted-foreground); }
+
+/* À finir : ce qui attend quelqu'un, chaque ligne mène à l'écran où le faire */
+.rv-todo { gap: 4px; }
+.rv-todo-row {
+  display: grid;
+  gap: 1px;
+  margin: 0 -8px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  color: var(--foreground);
+  text-decoration: none;
+  transition: background 120ms var(--ease);
+}
+.rv-todo-row:hover { background: var(--muted); }
+.rv-todo-row:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
+.rv-todo-row strong { font-size: 14.5px; font-weight: 600; line-height: 1.35; }
+.rv-todo-row span { font-size: 13.5px; line-height: 1.4; color: var(--muted-foreground); }
+.rv-todo-row.bad strong { color: var(--destructive); }
+
+/* Détails de la vidéo, à la place de la ferme : le même panneau, sans cadre */
+.rv-details { position: relative; min-width: 0; }
+.rv-details-close { position: absolute; top: -6px; right: -8px; z-index: 1; }
+.rv-details .rv-panel { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.rv-details .rv-head h2 { margin-right: 36px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.rv-details .rv-panel section h3, .rv-details .rv-section-head h3 { font-size: 16px; font-weight: 650; margin: 0 0 8px; }
+.rv-details .rv-section-head h3 { margin: 0; }
+.rv-details .facts.rv-facts { grid-template-columns: minmax(0, 1fr); font-size: 14px; }
+.rv-details .facts.rv-facts dt { padding: 8px 0 0; border: 0; font-size: 13px; }
+.rv-details .facts.rv-facts dd { padding: 1px 0 8px; }
+.rv-details .rv-text, .rv-details .rv-caption, .rv-details .rv-shot { font-size: 14px; }
 .rv-sheet-scrim { position: fixed; inset: 0; z-index: 29; }
 .rv-reasons {
   position: relative;
@@ -306,7 +471,6 @@
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
   background: var(--card);
-  box-shadow: var(--pop-shadow);
   outline: none;
   animation: fade 120ms var(--ease);
 }
@@ -437,39 +601,44 @@
 .rv-shot-head strong { font-weight: 600; }
 .rv-shot p { margin: 2px 0 0; overflow-wrap: anywhere; }
 
-/* ---------- Vide ---------- */
+/* ---------- Vide : la place de la vidéo reste, avec ce qui se passe ---------- */
 
-.empty-state.rv-empty {
+.rv-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 56px 24px;
-  border-radius: var(--r-xl);
-  border: 1px solid var(--border);
+  justify-content: center;
+  gap: 4px;
+  aspect-ratio: 9 / 16;
+  padding: 32px 28px;
+  border-radius: var(--r-2xl);
   background: var(--card);
-  box-shadow: var(--el-rest);
+  text-align: center;
+  color: var(--muted-foreground);
 }
-.rv-empty p { max-width: 48ch; margin: 0 0 14px; }
-.rv-empty .rv-empty-facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin: -4px 0 16px; }
+.rv-empty svg { color: var(--ok); }
+.rv-empty h2 { margin: 10px 0 2px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--foreground); }
+.rv-empty p { max-width: 30ch; margin: 0 0 16px; font-size: 15px; }
+.rv-empty .rv-empty-facts { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: -4px 0 18px; color: var(--foreground); }
 .rv-empty a { color: var(--foreground); }
-.dot.rv-dot-info { background: var(--info); box-shadow: 0 0 0 3px var(--info-bg); }
-
-/* ---------- Filtres ---------- */
-
-.toolbar.rv-filters { flex-wrap: wrap; }
-.rv-filter-ic { flex: none; }
 
 /* ---------- Décisions récentes ---------- */
 
 .thead.rv-hrow, .row.rv-hrow { grid-template-columns: minmax(220px, 2.4fr) minmax(170px, 1.4fr) 130px 32px; }
+/* Sans carte autour, comme le reste de l'app : des filets entre les décisions, la miniature porte la vidéo */
+.table.rv-history { border: 0; border-radius: 0; background: none; overflow: visible; }
+.rv-history .thead { background: none; padding: 0 4px; font-size: 13px; }
+.rv-history .row { background: none; padding-left: 4px; padding-right: 4px; border-radius: var(--r-md); }
+.rv-history .row:hover { background: var(--muted); }
+.rv-history .row.static:hover { background: none; }
+.rv-history .who .name { font-size: 15px; }
 /* Une liste de boutons (pas un tableau) : chaque ligne garde sa sémantique de bouton. */
 .rv-hlist { list-style: none; margin: 0; padding: 0; }
 .rv-hlist .row { border-bottom: 0; }
 .rv-hlist > li + li { border-top: 1px solid var(--border); }
 .row.rv-hrow[aria-current="true"] { background: var(--brand-bg); }
 .row.rv-hrow[aria-current="true"] .chev { opacity: 1; }
-.mini.rv-mini { width: 36px; height: 64px; }
+.mini.rv-mini { width: 40px; height: 71px; border: 0; border-radius: 7px; }
 .rv-ellipsis, .who .name.rv-ellipsis { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rv-hstate { display: grid; gap: 2px; min-width: 0; }
 .rv-hstate .problem { margin: 0; }
@@ -506,43 +675,64 @@
 
 /* ---------- Écrans étroits ---------- */
 
-@media (min-width: 961px) {
-  .rv-cap-facts { display: none; }
+/* Écran moyen : la vidéo à gauche, la file puis la ferme empilées à droite */
+@media (max-width: 1180px) {
+  .rv-stage {
+    grid-template-columns: auto minmax(260px, 340px);
+    grid-template-areas: "center left" "center right";
+    grid-template-rows: auto 1fr;
+  }
 }
 @media (max-width: 960px) {
   .rv-page { --rv-card-w: clamp(240px, calc((100vh - 330px) * 9 / 16), 400px); }
-  .rv-stage { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-  .rv-left { position: static; margin: 0 auto; width: min(100%, var(--rv-card-w)); }
+  .rv-stage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "center center" "left right";
+    grid-template-rows: none;
+    column-gap: 32px;
+  }
+  .rv-center {
+    grid-template-columns: min(100%, var(--rv-card-w));
+    grid-template-areas: "card" "rail" "cap" "hint";
+    justify-content: center;
+    row-gap: 18px;
+  }
+  .rv-rail { flex-direction: row; justify-content: center; align-items: flex-start; align-self: auto; }
+  .rv-pop-side { top: auto; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); }
   .thead.rv-hrow { display: none; }
   .row.rv-hrow { grid-template-columns: minmax(0, 1fr) auto; }
   .row.rv-hrow .rv-hwhen, .row.rv-hrow .chev { display: none; }
   .row.rv-hrow .rv-hstate { justify-items: end; max-width: 40vw; }
   .row.rv-hrow .rv-hstate .rv-hwhen-narrow { display: block; }
 }
-@supports (height: 100dvh) {
-  @media (max-width: 960px) {
-    .rv-page { --rv-card-w: clamp(240px, calc((100dvh - 330px) * 9 / 16), 400px); }
-  }
-}
 @media (max-width: 640px) {
-  .rv-page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  /* Téléphone : la vidéo prend la largeur que la hauteur permet, la première ligne de légende reste visible */
+  .rv-page {
+    --rv-card-w: clamp(240px, calc((100vh - 250px) * 9 / 16), 420px);
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+  .rv-stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "center" "left" "right"; }
+  .rv-center { grid-template-areas: "card" "cap" "hint"; row-gap: 14px; }
   .rv-page .page-head { margin-bottom: 14px; }
   .rv-page .page-head .actions { margin-left: 0; }
-  .toolbar.rv-filters { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px 2px; scrollbar-width: none; }
-  .rv-filters::-webkit-scrollbar { display: none; }
-  .rv-filters .seg { flex: none; }
-  /* La barre de décision reste sous le pouce, quel que soit le défilement */
-  .rv-decide {
+  /* Les boutons de décision restent sous le pouce, quel que soit le défilement */
+  .rv-rail {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     z-index: 10;
+    gap: 22px;
+    align-items: flex-end;
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
     background: var(--card);
     border-top: 1px solid var(--border);
   }
-  .rv-pop-above, .rv-pop-below { position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; }
+  .rv-act-btn { width: 52px; height: 52px; }
+  .rv-act-btn.keep { width: 60px; height: 60px; }
+  .rv-act-btn.small { width: 46px; height: 46px; }
+  .rv-act-label { font-size: 12.5px; }
+  .rv-pop-above, .rv-pop-below, .rv-pop-side { position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; transform: none; }
   .rv-sheet-scrim { background: var(--overlay); animation: fade 150ms var(--ease); }
   .rv-reasons {
     padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
@@ -553,10 +743,18 @@
   }
   .rv-reason { height: 36px; }
   /* Les notifications passent au-dessus de la barre de décision */
-  body:has(.rv-decide) .toasts { bottom: calc(72px + env(safe-area-inset-bottom)); }
+  body:has(.rv-rail) .toasts { bottom: calc(96px + env(safe-area-inset-bottom)); }
   .rv-panel { padding: 16px; }
   .facts.rv-facts { grid-template-columns: 116px minmax(0, 1fr); }
   .facts.rv-facts dt { padding-right: 10px; }
-  .empty-state.rv-empty { padding: 40px 20px; }
 }
 @keyframes rv-sheet { from { transform: translateY(24px); opacity: 0; } }
+/* Hauteur réelle de l'écran sur téléphone (barre d'adresse comprise), après les valeurs de repli */
+@supports (height: 100dvh) {
+  @media (max-width: 960px) {
+    .rv-page { --rv-card-w: clamp(240px, calc((100dvh - 330px) * 9 / 16), 400px); }
+  }
+  @media (max-width: 640px) {
+    .rv-page { --rv-card-w: clamp(240px, calc((100dvh - 250px) * 9 / 16), 420px); }
+  }
+}

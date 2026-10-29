@@ -19,31 +19,32 @@ export const ActivityLog = memo(function ActivityLog({ events }: { events: LogEv
   const [all, setAll] = useState(false);
   const shown = all ? events : events.slice(0, 8);
   return (
-    <>
-      <div className="section-title">
-        <h2>Activité</h2>
-        <span className="muted">Branchements, alertes et retours à la normale</span>
+    <section className="sec fm-activity" aria-labelledby="fm-activity">
+      <div className="sec-head">
+        <h2 id="fm-activity">Activité</h2>
+        <span className="sec-note">Branchements, alertes et retours à la normale</span>
       </div>
-      <div className="log">
-        {events.length === 0 && <div className="empty-state">Rien pour l'instant.</div>}
-        {shown.map((e, i) => {
-          const t = tone(e.kind);
-          return (
-            <div className="log-row" key={e.id ?? `live-${i}`}>
-              <time dateTime={e.at}>{dateTime(e.at)}</time>
-              <Icon icon={t.icon} className={t.cls} />
-              <span>{e.message}</span>
-            </div>
-          );
-        })}
-        {events.length > 8 && (
-          <div className="more">
-            <button className="btn ghost sm" onClick={() => setAll((v) => !v)}>
-              {all ? "Afficher moins" : `Afficher les ${events.length} événements`}
-            </button>
-          </div>
-        )}
-      </div>
-    </>
+      {events.length === 0 ? (
+        <p className="sec-note">Rien pour l'instant.</p>
+      ) : (
+        <ol className="fm-log">
+          {shown.map((e, i) => {
+            const t = tone(e.kind);
+            return (
+              <li key={e.id ?? `live-${i}`}>
+                <Icon icon={t.icon} size={16} className={t.cls} />
+                <span className="fm-log-msg">{e.message}</span>
+                <time dateTime={e.at}>{dateTime(e.at)}</time>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {events.length > 8 && (
+        <button className="sec-link" onClick={() => setAll((v) => !v)}>
+          {all ? "Afficher moins" : `Afficher les ${events.length} événements`}
+        </button>
+      )}
+    </section>
   );
 });

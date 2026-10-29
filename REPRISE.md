@@ -333,6 +333,13 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [x] API FastAPI + front React : Apps, Validation, Calendrier, Production, Ferme ; revue de cohérence du 29/10 corrigée
       (stock « à valider » / « prête à publier », un seul titre par vidéo et liens idée → vidéo → post, zones
       tactiles et champs à 16 px, notifications communes, heures relatives ou dans le fuseau des comptes)
+- [ ] Direction artistique « Fil » (choisie le 29/10/2026 sur le canevas Claude Design) : fond sombre et chaud,
+      Funnel Display / Funnel Sans, le vert réservé à « Garder ». Fait : l'habillage de toute l'app ; Validation
+      (vidéo en grand, colonne Garder / Jeter / Détails / Plus tard, autour : Aujourd'hui, Ensuite, les iPhones,
+      À finir) ; Ferme (mur d'iPhones, numéro en grand sur l'écran éteint) ; Calendrier, Production, Apps et
+      décisions récentes sans cartes (briques communes `.sec` et `.chips` dans `styles.css`). Vérifié en 1440 et
+      390 px (Validation aussi en 1280, 1024 et 768). Reste : illustrations Loop et Cast
+      (`docs/design/illustrations-astra.md`)
 - [ ] Stockage objet + Publisher Instagram (squelette documenté seulement)
 - [ ] Publisher TikTok (squelette documenté ; en attendant : canal manuel « à finir »)
 - [x] Planification + régulateur + exécution des posts (3 par jour et par compte après montée en charge, plafond 5)

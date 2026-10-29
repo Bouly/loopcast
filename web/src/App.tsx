@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { call } from "./api";
 import { AppDetailPage, AppsPage } from "./features/apps/AppsPage";
 import { CalendarPage } from "./features/calendar/CalendarPage";
 import { ProductionPage } from "./features/production/ProductionPage";
 import { ReviewPage } from "./features/review/ReviewPage";
-import { useOnline } from "./live";
+import { useLive, useOnline } from "./live";
 import { FarmPage } from "./pages/FarmPage";
 import { Placeholder } from "./pages/Placeholder";
 import { Link, match, usePath } from "./router";
@@ -29,9 +30,24 @@ function Page({ path }: { path: string }) {
   return <Placeholder title="Page introuvable" text="Cette adresse ne correspond à aucune section." />;
 }
 
+/** Vidéos qui attendent une décision : affiché à côté de « Validation », tenu à jour en direct. */
+function useToReview(): number {
+  const [count, setCount] = useState(0);
+  const reload = useCallback(() => {
+    call<{ review: number }>("GET", "/api/content/stats")
+      .then((s) => setCount(s.review ?? 0))
+      .catch(() => {});
+  }, []);
+  useEffect(reload, [reload]);
+  useLive("open", reload);
+  useLive("content", reload);
+  return count;
+}
+
 export function App() {
   const path = usePath();
   const online = useOnline();
+  const toReview = useToReview();
   const current = path === "/" ? "/ferme" : "/" + (path.split("/")[1] ?? "");
   const section = SECTIONS.find((s) => s.path === current);
 
@@ -45,12 +61,13 @@ export function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <Link to="/" className="wordmark">
-            Loopcast
+            loopcast
           </Link>
           <nav className="nav" aria-label="Sections">
             {SECTIONS.map((s) => (
               <Link key={s.path} to={s.path} aria-current={current === s.path ? "page" : undefined}>
                 {s.label}
+                {s.path === "/validation" && toReview > 0 && <span className="nav-count">{toReview}</span>}
               </Link>
             ))}
           </nav>

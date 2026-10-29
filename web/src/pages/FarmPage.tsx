@@ -4,7 +4,7 @@ import { ActivityLog } from "../ActivityLog";
 import { api, type Phone } from "../api";
 import { FarmServices } from "../FarmServices";
 import { PhoneDrawer } from "../PhoneDrawer";
-import { PhoneTable } from "../PhoneTable";
+import { PhoneWall } from "../PhoneWall";
 import { Icon } from "../ui";
 import { useFarm } from "../useFarm";
 
@@ -73,10 +73,12 @@ export function FarmPage() {
   };
 
   const piloted = phones.filter((p) => p.session_id).length;
+  // La recherche ne sert qu'à partir d'une dizaine d'iPhones ; en dessous, le mur se lit d'un coup d'œil.
+  const searchable = phones.length > 8 || query !== "";
 
   return (
     <>
-      <main className="page">
+      <main className="page fm-page">
         <div className="page-head">
           <div>
             <h1>Ferme d'iPhones</h1>
@@ -105,28 +107,29 @@ export function FarmPage() {
 
         <FarmServices farm={farm} />
 
-        <div className="toolbar">
-          <div className="seg" role="group" aria-label="Filtrer par état">
+        <div className="fm-tools">
+          <div className="chips" role="group" aria-label="Filtrer par état">
             {FILTERS.map((f) => (
               <button key={f.key} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
-                {f.label}
-                <span className="count">{counts[f.key]}</span>
+                {f.label} <span className="num">{counts[f.key]}</span>
               </button>
             ))}
           </div>
-          <label className="search">
-            <span className="sr-only">Rechercher un iPhone</span>
-            <Icon icon={Search01Icon} size={15} />
-            <input
-              className="field"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Rechercher par nom, propriétaire, modèle, UDID"
-            />
-          </label>
+          {searchable && (
+            <label className="search">
+              <span className="sr-only">Rechercher un iPhone</span>
+              <Icon icon={Search01Icon} size={15} />
+              <input
+                className="field"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Nom, propriétaire, modèle, UDID"
+              />
+            </label>
+          )}
         </div>
 
-        <PhoneTable
+        <PhoneWall
           phones={shown}
           loading={!loaded}
           selected={selected?.udid ?? null}

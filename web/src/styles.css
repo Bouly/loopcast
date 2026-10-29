@@ -1,71 +1,73 @@
-/* Jetons repris du kit treats-ui (doctrine du 30/09/2026) : surfaces blanches, bordure 1 px,
-   petites ombres, noir plat pour l'unique action principale, la couleur ne porte qu'un état.
-   Structure inspirée de la console Tailscale : une liste de machines dense, libellés en mono. */
+/* Direction « Fil » (29/10/2026) : on valide et on pilote comme on regarde TikTok. Fond sombre et chaud, la
+   vidéo et les iPhones en grand, peu de cadres. Le vert ne sert qu'à « Garder » et à ce qui va bien ; le bouton
+   principal est crème sur fond sombre. Une bordure ou une ombre, jamais les deux (anti-slop : impeccable.style). */
 
 @import "@fontsource-variable/jetbrains-mono";
-
-@font-face {
-  font-family: "Satoshi Variable";
-  src: url("./fonts/satoshi-variable.woff2") format("woff2");
-  font-weight: 300 900;
-  font-style: normal;
-  font-display: swap;
-}
+@import "@fontsource-variable/funnel-sans";
+@import "@fontsource-variable/funnel-display";
 
 :root {
-  --background: #f4f5f7;
-  --foreground: #111316;
-  --card: #ffffff;
-  --muted: #f1f2f4;
-  --muted-foreground: #686c73;
-  --border: #e4e5e9;
-  --input: #e4e5e9;
-  --ring: #111316;
+  --background: #120f0c;
+  --foreground: #f5f1ec;
+  --card: #1a1612;
+  --muted: #231e19;
+  --muted-foreground: #a39a90;
+  --soft-foreground: #cfc7be; /* texte secondaire qui doit rester lisible : légendes, états */
+  --border: #2d2721;
+  --input: #3d352d;
+  --ring: #f5f1ec;
 
-  --brand: #111316;
-  --brand-hover: #2c2f36;
-  --brand-active: #050609;
-  --brand-foreground: #ffffff;
-  --brand-bg: #eceef1;
-  --brand-border: #d3d6db;
+  --brand: #f5f1ec;
+  --brand-hover: #ffffff;
+  --brand-active: #e4ddd4;
+  --brand-foreground: #120f0c;
+  --brand-bg: #2a241e;
+  --brand-border: #4a4239;
 
-  --el-rest: 0 1px 3px rgb(17 19 22 / 0.05);
-  --el-hover: 0 2px 6px rgb(17 19 22 / 0.07);
-  --el-press: inset 0 1px 2px rgb(17 19 22 / 0.06);
-  --field-inset: 0 1px 2px rgb(17 19 22 / 0.03);
-  --pop-shadow: 0 10px 28px rgb(17 19 22 / 0.12);
-  --modal-shadow: 0 24px 64px rgb(17 19 22 / 0.18);
-  --overlay: rgb(24 22 20 / 0.14);
+  /* Garder : la seule couleur vive de l'interface */
+  --keep: #5be49b;
+  --keep-hover: #78eeb0;
+  --keep-foreground: #0d1a12;
 
-  --ok: #1f6e4b;
-  --ok-bg: #e7f2ec;
-  --ok-border: #c8e0d3;
-  --warn: #8a5a16;
-  --warn-bg: #fbf0df;
-  --warn-border: #f0e0c6;
-  --info: #2e5aac;
-  --info-bg: #e8eef9;
-  --info-border: #d3e0f4;
-  --destructive: #b3261e;
-  --destructive-bg: #fdf6f5;
-  --destructive-border: #e7c4c0;
+  --el-rest: none;
+  --el-hover: none;
+  --el-press: none;
+  --field-inset: none;
+  --pop-shadow: 0 18px 48px rgb(0 0 0 / 0.55);
+  --modal-shadow: 0 28px 80px rgb(0 0 0 / 0.6);
+  --overlay: rgb(0 0 0 / 0.55);
 
-  --screen: #0c0d0f;
-  --bezel: #1b1c1f;
-  --bezel-edge: #34363b;
-  --sidebar: #fbfbfc;
-  --idle: #c3c7cd;
+  --ok: #5be49b;
+  --ok-bg: rgb(91 228 155 / 0.12);
+  --ok-border: rgb(91 228 155 / 0.32);
+  --warn: #ffd24a;
+  --warn-bg: rgb(255 210 74 / 0.12);
+  --warn-border: rgb(255 210 74 / 0.32);
+  --info: #8cb4ff;
+  --info-bg: rgb(140 180 255 / 0.12);
+  --info-border: rgb(140 180 255 / 0.32);
+  --destructive: #ff7a59;
+  --destructive-bg: rgb(255 122 89 / 0.12);
+  --destructive-border: rgb(255 122 89 / 0.34);
 
-  --r-xs: 5px;
-  --r-md: 8px;
-  --r-lg: 10px;
-  --r-xl: 14px;
-  --r-2xl: 16px;
+  --screen: #000000;
+  --on-screen: #ffffff; /* texte et icônes posés sur une vidéo ou un écran d'iPhone */
+  --bezel: #2d2721;
+  --bezel-edge: #4a4239;
+  --sidebar: #221d18;
+  --idle: #5c544b;
 
-  --font: "Satoshi Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --r-xs: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+  --r-2xl: 26px;
+
+  --font: "Funnel Sans Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --display: "Funnel Display Variable", "Funnel Sans Variable", system-ui, sans-serif;
   --mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -74,10 +76,11 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font: 13.5px/1.5 var(--font);
+  font: 15px/1.5 var(--font);
   font-feature-settings: "tnum" 0;
   -webkit-font-smoothing: antialiased;
 }
+h1, h2, h3 { font-family: var(--display); }
 button, input, textarea, select { font: inherit; color: inherit; }
 .mono { font-family: var(--mono); font-size: 12px; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
@@ -94,15 +97,15 @@ button, input, textarea, select { font: inherit; color: inherit; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 11px;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
   border-radius: var(--r-md);
   border: 1px solid var(--input);
   background: var(--card);
   box-shadow: var(--el-rest);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition: box-shadow 150ms var(--ease), background 150ms var(--ease), transform 120ms var(--ease);
@@ -117,23 +120,25 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-foreground); }
 .btn.primary:hover:not(:disabled) { background: var(--brand-hover); }
 .btn.primary:active:not(:disabled) { background: var(--brand-active); }
+.btn.keep { background: var(--keep); border-color: var(--keep); color: var(--keep-foreground); }
+.btn.keep:hover:not(:disabled) { background: var(--keep-hover); }
 .btn.ghost { background: transparent; border-color: transparent; box-shadow: none; }
 .btn.ghost:hover:not(:disabled) { background: var(--muted); }
 /* Un lien qui a l'air d'un bouton (vers une autre section) : couleur et soulignement du bouton */
 a.btn { color: var(--foreground); text-decoration: none; }
 a.btn.primary { color: var(--brand-foreground); }
-.btn.sm { height: 28px; padding: 0 9px; }
-.btn.icon { width: 30px; padding: 0; }
-.btn.sm.icon { width: 28px; }
+.btn.sm { height: 30px; padding: 0 11px; font-size: 13.5px; }
+.btn.icon { width: 36px; padding: 0; }
+.btn.sm.icon { width: 30px; }
 
 .field {
-  height: 32px;
-  padding: 0 10px;
+  height: 38px;
+  padding: 0 12px;
   border-radius: var(--r-md);
   border: 1px solid var(--input);
-  background: var(--card);
+  background: var(--background);
   box-shadow: var(--field-inset);
-  font-size: 13px;
+  font-size: 14.5px;
   min-width: 0;
 }
 .field:disabled { background: var(--muted); }
@@ -143,31 +148,30 @@ a.btn.primary { color: var(--brand-foreground); }
 .seg {
   display: inline-flex;
   gap: 2px;
-  padding: 2px;
-  border-radius: var(--r-md);
+  padding: 3px;
+  border-radius: 13px;
   background: var(--muted);
-  border: 1px solid var(--border);
 }
 .seg button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: transparent;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--muted-foreground);
   cursor: pointer;
 }
-.seg button[aria-pressed="true"] { background: var(--card); color: var(--foreground); box-shadow: var(--el-rest); }
-.seg .count { font-family: var(--mono); font-size: 11.5px; }
+.seg button[aria-pressed="true"] { background: var(--foreground); color: var(--background); }
+.seg .count { font-family: var(--mono); font-size: 12px; }
 
 /* ---------- États ---------- */
 
-.state { display: inline-flex; align-items: center; gap: 7px; font-weight: 500; font-size: 13px; }
+.state { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none; }
 .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
 .dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
@@ -178,13 +182,13 @@ a.btn.primary { color: var(--brand-foreground); }
 .badge {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 6px;
+  height: 24px;
+  padding: 0 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: var(--muted);
-  font-size: 11.5px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--muted-foreground);
 }
 .badge.live { background: var(--info-bg); border-color: var(--info-border); color: var(--info); }
@@ -208,6 +212,7 @@ a.btn.primary { color: var(--brand-foreground); }
 
 /* Ce dont dépend le pilotage hors des iPhones (Appium, tunneld, signature) : une ligne sous le titre */
 .farm-services { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 16px; }
+.farm-services .state { flex-wrap: wrap; column-gap: 8px; }
 .farm-services .muted { font-weight: 400; }
 
 /* ---------- Barre du haut ---------- */
@@ -216,41 +221,49 @@ a.btn.primary { color: var(--brand-foreground); }
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--card);
+  background: var(--background);
   border-bottom: 1px solid var(--border);
 }
 .topbar-inner {
   display: flex;
   align-items: center;
-  gap: 20px;
-  height: 52px;
-  padding: 0 24px;
-  max-width: 1280px;
+  gap: 32px;
+  height: 64px;
+  padding: 0 32px;
+  max-width: 1360px;
   margin: 0 auto;
 }
-.wordmark { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; color: var(--foreground); text-decoration: none; }
-.nav { display: flex; gap: 2px; height: 100%; }
+.wordmark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 25px;
+  letter-spacing: -0.035em;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.nav { display: flex; gap: 22px; height: 100%; }
 .nav a {
   display: inline-flex;
   align-items: center;
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: 500;
+  gap: 7px;
+  font-size: 15.5px;
+  font-weight: 600;
   color: var(--muted-foreground);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  transition: color 120ms var(--ease);
 }
-.nav a[aria-current="page"] { color: var(--foreground); border-bottom-color: var(--foreground); }
+.nav a:hover { color: var(--foreground); }
+.nav a[aria-current="page"] { color: var(--foreground); }
+.nav-count { color: var(--keep); font-variant-numeric: tabular-nums; }
 .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.conn { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted-foreground); }
+.conn { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted-foreground); }
 
 /* ---------- Page ---------- */
 
-.page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; }
-.page-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
-.page-head h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 0; line-height: 1.25; }
-.page-head p { margin: 2px 0 0; color: var(--muted-foreground); font-size: 13.5px; }
+.page { max-width: 1360px; margin: 0 auto; padding: 32px 32px 72px; }
+.page-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 26px; flex-wrap: wrap; }
+.page-head h1 { font-size: 40px; font-weight: 750; letter-spacing: -0.03em; margin: 0; line-height: 1.05; }
+.page-head p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 16px; }
 .page-head .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
 .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
@@ -258,7 +271,163 @@ a.btn.primary { color: var(--brand-foreground); }
 .search .field { width: 100%; padding-left: 32px; }
 .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); }
 
-/* ---------- Liste des iPhones (façon « Machines » de Tailscale) ---------- */
+/* ---------- Fil : sections sans cadre, titrées en Funnel Display, séparées d'un filet ---------- */
+
+.sec { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.sec + .sec { padding-top: 24px; border-top: 1px solid var(--border); }
+.sec h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.sec ul, .sec ol { display: grid; margin: 0; padding: 0; list-style: none; }
+.sec-note { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted-foreground); }
+.sec-note strong { color: var(--foreground); font-weight: 600; }
+.sec-note a { color: var(--foreground); }
+.quiet { display: flex; align-items: flex-start; gap: 8px; }
+.quiet svg { flex: none; margin-top: 2px; color: var(--ok); }
+.sec-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+.sec-link svg { transition: transform 120ms var(--ease); }
+.sec-link:hover svg { transform: translateX(2px); }
+.sec-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
+
+/* Filtres : des pastilles qui passent à la ligne, l'active en crème */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--soft-foreground);
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+.chips button:hover { background: var(--muted); }
+.chips button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.chips button[aria-pressed="true"] { background: var(--foreground); border-color: var(--foreground); color: var(--background); }
+.chips .num { font-weight: 500; opacity: 0.7; }
+
+/* ---------- Ferme : le mur d'iPhones, chacun en grand avec son écran ---------- */
+
+.fm-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 6px 0 28px; }
+.fm-tools .search { max-width: 280px; }
+.fm-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 176px));
+  gap: 40px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fm-phone {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--foreground);
+  text-align: left;
+  font: inherit;
+}
+button.fm-phone { cursor: pointer; }
+.fm-device {
+  display: block;
+  padding: 6px;
+  border-radius: 30px;
+  background: var(--bezel);
+  box-shadow: inset 0 0 0 1px var(--bezel-edge);
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), opacity 160ms var(--ease);
+}
+.fm-device.skeleton { aspect-ratio: 430 / 932; }
+.fm-screen {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 430 / 932;
+  border-radius: 24px;
+  background: var(--screen);
+  overflow: hidden;
+}
+.fm-screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* L'îlot : noir sur noir quand l'écran est éteint, visible par-dessus une capture, comme sur un vrai iPhone */
+.fm-screen::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 3.2%;
+  left: 50%;
+  width: 31%;
+  aspect-ratio: 3.6 / 1;
+  border-radius: 999px;
+  background: var(--screen);
+  transform: translateX(-50%);
+}
+/* Écran éteint : le numéro de l'iPhone, en grand */
+.fm-off {
+  font-family: var(--display);
+  font-size: 80px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: color-mix(in srgb, var(--on-screen) 14%, transparent);
+  user-select: none;
+}
+button.fm-phone:hover .fm-device { transform: translateY(-3px); }
+.fm-phone:focus-visible { outline: none; }
+.fm-phone:focus-visible .fm-device { outline: 2px solid var(--ring); outline-offset: 4px; }
+.fm-phone.attention .fm-device, .fm-phone.unknown .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--warn); }
+.fm-phone.unknown .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--destructive); }
+.fm-phone.piloted .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--info); }
+.fm-phone[aria-current="true"] .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--foreground); }
+.fm-phone.offline .fm-device { opacity: 0.6; }
+.fm-phone.never_seen .fm-device { opacity: 0.4; }
+.fm-phone.never_seen .fm-name { color: var(--muted-foreground); }
+
+.fm-meta { display: grid; gap: 3px; min-width: 0; padding: 0 4px; }
+.fm-name { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; }
+.fm-sub { font-size: 13.5px; line-height: 1.4; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.fm-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 5px; font-size: 14px; }
+.fm-meta .problem { margin-top: 2px; font-size: 13.5px; }
+.fm-empty { padding: 56px 24px; }
+
+/* Activité : une liste sous le mur, sans cadre */
+.fm-activity { margin-top: 64px; padding-top: 28px; border-top: 1px solid var(--border); }
+.fm-log li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.fm-log li:last-child { border-bottom: 0; }
+.fm-log svg { align-self: start; margin-top: 3px; }
+.fm-log time { font-size: 13.5px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fm-log .ic-ok { color: var(--ok); }
+.fm-log .ic-warn { color: var(--warn); }
+.fm-log .ic-bad { color: var(--destructive); }
+.fm-log .ic-info { color: var(--muted-foreground); }
+
+/* ---------- Tableaux (Calendrier, décisions récentes) ---------- */
 
 .table {
   background: var(--card);
@@ -336,27 +505,10 @@ a.btn.primary { color: var(--brand-foreground); }
   animation: shimmer 1.2s linear infinite; border-radius: 6px; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
-/* ---------- Activité ---------- */
+/* ---------- Titre de section (Calendrier) ---------- */
 
 .section-title { display: flex; align-items: baseline; gap: 10px; margin: 32px 0 10px; }
 .section-title h2 { font-size: 16px; font-weight: 600; margin: 0; }
-.log { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--el-rest); }
-.log-row {
-  display: grid;
-  grid-template-columns: 150px 18px 1fr;
-  gap: 10px;
-  align-items: start;
-  padding: 9px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.log-row:last-child { border-bottom: 0; }
-.log-row time { font-family: var(--mono); font-size: 11.5px; color: var(--muted-foreground); padding-top: 2px; }
-.log-row .ic-ok { color: var(--ok); }
-.log-row .ic-warn { color: var(--warn); }
-.log-row .ic-bad { color: var(--destructive); }
-.log-row .ic-info { color: var(--muted-foreground); }
-.log .more { padding: 8px 16px; }
 
 /* ---------- Panneau latéral d'un iPhone ---------- */
 
@@ -385,7 +537,7 @@ a.btn.primary { color: var(--brand-foreground); }
   padding: 14px 16px 14px 20px;
   border-bottom: 1px solid var(--border);
 }
-.drawer-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.drawer-head h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.015em; }
 .drawer-head .sub { color: var(--muted-foreground); font-size: 12.5px; }
 .head-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .drawer-body {
@@ -590,8 +742,20 @@ a.btn.primary { color: var(--brand-foreground); }
   .nav::-webkit-scrollbar { display: none; }
   .nav a { white-space: nowrap; }
   .page { padding: 20px 16px 48px; }
-  .log-row { grid-template-columns: 18px 1fr; }
-  .log-row time { grid-column: 2; padding: 0; }
+  /* Trois iPhones par rangée : l'état d'une vingtaine se lit en deux écrans */
+  .fm-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 12px; }
+  .fm-phone { gap: 10px; }
+  .fm-device { padding: 4px; border-radius: 20px; }
+  .fm-screen { border-radius: 16px; }
+  .fm-off { font-size: 48px; }
+  .fm-meta { padding: 0 2px; }
+  .fm-name { font-size: 16px; }
+  .fm-sub { display: none; }
+  .fm-state { gap: 2px 8px; margin-top: 2px; font-size: 13px; }
+  .fm-meta .problem { font-size: 12.5px; }
+  .page-head .actions { margin-left: 0; }
+  .fm-log li { grid-template-columns: 18px minmax(0, 1fr); row-gap: 2px; }
+  .fm-log time { grid-column: 2; }
   .drawer { width: 100vw; }
   .drawer-body { padding: 16px; }
 }

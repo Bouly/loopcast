@@ -1,9 +1,9 @@
 import { Add01Icon, Alert02Icon, ArrowRight01Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ago } from "../../format";
 import { Link, navigate } from "../../router";
 import { Icon } from "../../ui";
-import type { AppOverview } from "./api";
+import { appsApi, type AppOverview } from "./api";
 import { AppFormDrawer } from "./AppForm";
 import { useAppsList } from "./data";
 import { LANG_LABEL, plural } from "./format";
@@ -17,7 +17,7 @@ import {
   type Todo,
   type Tone,
 } from "./journey";
-import { AppAvatar, Empty, StatusText, Track, toast, useTitle } from "./kit";
+import { Empty, StatusText, Track, toast, useTitle } from "./kit";
 import "./apps.css";
 
 export { AppDetailPage } from "./AppDetail";
@@ -38,63 +38,88 @@ function tagline(app: AppOverview): string {
   return (one?.fr || one?.en || app.description.split("\n").find((l) => l.trim()) || "").trim();
 }
 
+/** Les premières captures de l'app en petits écrans : la liste montre les apps, pas seulement leur nom. */
+function Shots({ app }: { app: AppOverview }) {
+  const [ids, setIds] = useState<number[]>([]);
+  useEffect(() => {
+    if (!app.counts.screenshots) return setIds([]);
+    let alive = true;
+    appsApi.assets(app.id).then(
+      (list) => alive && setIds(list.filter((a) => a.kind === "screenshot").slice(0, 3).map((a) => a.id)),
+      () => alive && setIds([]),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [app.id, app.counts.screenshots]);
+  return (
+    <span className="ax-shots" aria-hidden>
+      {ids.length ? (
+        ids.map((id) => <img key={id} src={`/api/apps/${encodeURIComponent(app.id)}/assets/${id}/thumb`} alt="" loading="lazy" />)
+      ) : (
+        <span className="ax-shot-empty">
+          <Icon icon={SmartPhone01Icon} size={20} />
+        </span>
+      )}
+    </span>
+  );
+}
+
 function AppRow({ row }: { row: Row }) {
   const { app, todo, tone, step } = row;
   const others = app.counts.assets - app.counts.screenshots;
   const line = tagline(app);
   return (
-    <div role="listitem">
-      <Link to={`/apps/${encodeURIComponent(app.id)}`} className="row ax-app-row">
-        <span className="who">
-          <AppAvatar app={app} />
-          <span className="who-text">
-            <span className="name">
-              <span className="ax-clamp2">{app.name}</span>
-            </span>
-            <span className="sub">{line || <span className="mono">{app.id}</span>}</span>
-          </span>
-        </span>
-        <span className="ax-col-step">
+    <li>
+      <Link to={`/apps/${encodeURIComponent(app.id)}`} className="ax-app">
+        <Shots app={app} />
+        <span className="ax-app-main">
+          <span className="ax-app-name">{app.name}</span>
+          <span className="ax-app-line">{line || <span className="mono">{app.id}</span>}</span>
           <span className="ax-stage">
             <StatusText tone={tone}>{STATUS_LABEL[app.status]}</StatusText>
-            <Track step={stepIndex(app)} />
+            <Track step={step} />
           </span>
           {todo && <span className={`problem ${todo.tone}`}>{todo.text}</span>}
           {!todo && step === 5 && app.status === "active" && <span className="problem">Idées générées en continu</span>}
         </span>
-        <span className="ax-col-langs">
-          {app.langs.map((l) => (
-            <span key={l} className="badge mono" title={l === "fr" ? "Français" : "Anglais"}>
-              {LANG_LABEL[l]}
-            </span>
-          ))}
+        <span className="ax-app-meta">
+          <span className="ax-langs">
+            {app.langs.map((l) => (
+              <span key={l} className="badge mono" title={l === "fr" ? "Français" : "Anglais"}>
+                {LANG_LABEL[l]}
+              </span>
+            ))}
+          </span>
+          <span className="num">
+            {plural(app.counts.screenshots, "capture", "captures")}
+            {others > 0 ? `, ${plural(others, "autre fichier", "autres fichiers")}` : ""}
+          </span>
+          <span className="muted">Mise à jour {ago(app.updated_at).toLowerCase()}</span>
         </span>
-        <span className="ax-col-shots">
-          <span className="num">{plural(app.counts.screenshots, "capture", "captures")}</span>
-          {others > 0 && <span className="sub muted">{plural(others, "autre fichier", "autres fichiers")}</span>}
-        </span>
-        <span className="ax-col-updated muted">{ago(app.updated_at)}</span>
-        <span className="chev" aria-hidden>
-          <Icon icon={ArrowRight01Icon} />
-        </span>
+        <Icon icon={ArrowRight01Icon} className="chev" />
       </Link>
-    </div>
+    </li>
   );
 }
 
 function SkeletonRows() {
   return (
-    <>
-      {[0, 1, 2].map((i) => (
-        <div className="row ax-app-row static" key={i} aria-hidden>
-          <span className="who">
-            <span className="ax-avatar skeleton" />
-            <span className="skeleton" style={{ width: 150, height: 14 }} />
-          </span>
-          <span className="skeleton" style={{ width: 120, height: 12 }} />
-        </div>
+    <ul className="ax-apps-list" aria-hidden>
+      {[0, 1].map((i) => (
+        <li key={i}>
+          <div className="ax-app">
+            <span className="ax-shots">
+              <span className="ax-shot-empty skeleton" />
+            </span>
+            <span className="ax-app-main">
+              <span className="skeleton" style={{ width: 180, height: 20 }} />
+              <span className="skeleton" style={{ width: 280, height: 12 }} />
+            </span>
+          </div>
+        </li>
       ))}
-    </>
+    </ul>
   );
 }
 
@@ -155,37 +180,24 @@ export function AppsPage() {
           </div>
         )}
 
-        {!empty && (
-          <div className="toolbar">
-            <div className="seg" role="group" aria-label="Filtrer les apps">
-              {FILTERS.map((f) => (
-                <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
-                  {f.label}
-                  <span className="count">{counts[f.key]}</span>
-                </button>
-              ))}
-            </div>
+        {!empty && apps.length > 1 && (
+          <div className="chips ax-filters" role="group" aria-label="Filtrer les apps">
+            {FILTERS.map((f) => (
+              <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+                {f.label} <span className="num">{counts[f.key]}</span>
+              </button>
+            ))}
           </div>
         )}
 
-        <div className="table ax-table">
-          {!empty && (
-            <div className="thead" aria-hidden>
-              <span>App</span>
-              <span>Étape</span>
-              <span>Langues</span>
-              <span>Fichiers</span>
-              <span>Mise à jour</span>
-              <span />
-            </div>
-          )}
+        <div className="ax-apps">
           {!loaded && <SkeletonRows />}
           {loaded && shown.length > 0 && (
-            <div role="list" aria-label="Apps">
+            <ul className="ax-apps-list" aria-label="Apps">
               {shown.map((r) => (
                 <AppRow key={r.app.id} row={r} />
               ))}
-            </div>
+            </ul>
           )}
           {empty && (
             <Empty icon={SmartPhone01Icon} title="Aucune app pour l'instant" actions={add}>
