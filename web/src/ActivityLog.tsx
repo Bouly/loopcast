@@ -4,8 +4,12 @@ import type { LogEvent } from "./api";
 import { dateTime } from "./format";
 import { Icon } from "./ui";
 
+// Ce qui arrête le pilotage de toute la ferme (Appium, tunneld, signature expirée), comme un iPhone perdu
+const BLOCKING = ["farm_error", "phone_gone", "problem_offline", "problem_appium_down", "problem_tunneld_down",
+  "problem_signing_expired"];
+
 function tone(kind: string) {
-  if (kind === "farm_error" || kind === "phone_gone" || kind === "problem_offline") return { icon: Alert02Icon, cls: "ic-bad" };
+  if (BLOCKING.includes(kind)) return { icon: Alert02Icon, cls: "ic-bad" };
   if (kind.startsWith("problem_")) return { icon: Alert02Icon, cls: "ic-warn" };
   if (kind.startsWith("resolved_") || kind === "phone_back") return { icon: CheckmarkCircle02Icon, cls: "ic-ok" };
   return { icon: InformationCircleIcon, cls: "ic-info" };

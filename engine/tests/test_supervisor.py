@@ -1,8 +1,10 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from conftest import UDID1, UDID2, health
 
 from loopcast.farm.backend import BackendError, DeviceInfo
+from loopcast.farm.health import FarmHealth, Service, Signing
 from loopcast.farm.supervisor import Supervisor, list_phones
 
 
@@ -81,3 +83,66 @@ def test_list_includes_declared_but_never_seen(config, conn, backend, clock):
     assert rows["phone-1"]["status"] == "ok" and rows["phone-1"]["model_name"] == "iPhone 14 Pro"
     assert rows["phone-2"]["status"] == "never_seen" and rows["phone-2"]["udid"] == UDID2
     assert rows["phone-3"]["problems"][0]["message"] == "UDID à renseigner"
+
+
+# --- Santé de la ferme hors iPhones : Appium, tunneld, signature de WebDriverAgent -------------------------
+
+class FarmChecks:
+    """Appium, tunneld et la signature, réglables à la main."""
+
+    def __init__(self):
+        self.appium = Service(True, "prêt (3.9.0)")
+        self.tunneld = Service(True, "actif, aucun iPhone en tunnel")
+        self.signing = Signing("ok", datetime(2026, 11, 4, 21, 11, tzinfo=timezone.utc), "x.xctrunner")
+
+    def check(self, now):
+        return FarmHealth(now, self.appium, self.tunneld, self.signing)
+
+
+def farm_kinds(result):
+    return [k for udid, k, _m in result.events if udid is None]
+
+
+def test_a_service_down_is_reported_after_two_rounds_and_once(config, conn, backend, clock):
+    checks = FarmChecks()
+    sup = Supervisor(config, conn, backend, clock, checks=checks)
+    first = sup.tick()
+    assert farm_kinds(first) == [] and first.farm_changed           # premier tour : la page se remplit
+    assert not sup.tick().farm_changed                               # rien n'a bougé : pas de mise à jour
+    checks.appium = Service(False, "ne répond pas")
+    blip = sup.tick()
+    assert farm_kinds(blip) == [] and blip.farm_changed             # un redémarrage d'Appium ne réveille personne
+    assert farm_kinds(sup.tick()) == ["problem_appium_down"]
+    assert farm_kinds(sup.tick()) == [] and sup.farm_problems == {"appium_down"}
+    # Le serveur redémarre : le problème est repris du journal, sans nouvelle alerte.
+    restarted = Supervisor(config, conn, backend, clock, checks=checks)
+    assert farm_kinds(restarted.tick()) == [] and restarted.farm_problems == {"appium_down"}
+    checks.appium = Service(True, "prêt (3.9.0)")
+    assert farm_kinds(restarted.tick()) == ["resolved_appium_down"]
+    assert [r["message"] for r in conn.execute("SELECT message FROM events WHERE phone_udid IS NULL ORDER BY id")] == \
+        ["Appium ne répond pas : aucune prise en main possible", "Appium répond de nouveau"]
+
+
+def test_signing_warns_then_worsens_then_is_renewed_once(config, conn, backend, clock):
+    checks = FarmChecks()
+    expires = checks.signing.expires_at
+    sup = Supervisor(config, conn, backend, clock, checks=checks)
+    sup.tick()
+    checks.signing = Signing("expiring", expires, "x.xctrunner")
+    assert farm_kinds(sup.tick()) == ["problem_signing_expiring"]
+    checks.signing = Signing("expired", expires, "x.xctrunner")
+    assert farm_kinds(sup.tick()) == ["problem_signing_expired"]    # elle s'aggrave : pas de « résolu » au passage
+    restarted = Supervisor(config, conn, backend, clock, checks=checks)
+    assert farm_kinds(restarted.tick()) == [] and restarted.farm_problems == {"signing_expired"}
+    checks.signing = Signing("missing")                              # plus de profil lisible : on ne conclut rien
+    assert farm_kinds(restarted.tick()) == [] and restarted.farm_problems == {"signing_expired"}
+    checks.signing = Signing("ok", expires + timedelta(days=7), "x.xctrunner")
+    assert farm_kinds(restarted.tick()) == ["resolved_signing_expired"] and restarted.farm_problems == set()
+
+
+def test_a_failing_farm_check_does_not_stop_the_phones(config, conn, backend, clock):
+    class Broken:
+        def check(self, now):
+            raise RuntimeError("vérification impossible")
+
+    assert kinds(Supervisor(config, conn, backend, clock, checks=Broken()).tick()) == ["phone_new"]

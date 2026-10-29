@@ -20,6 +20,22 @@ export type Phone = {
 
 export type LogEvent = { id?: number; at?: string; phone_udid?: string | null; kind: string; message: string };
 
+/** Ce dont dépend le pilotage hors des iPhones (engine/loopcast/farm/health.py). */
+export type FarmService = { ok: boolean; detail: string };
+export type FarmSigning = {
+  state: "ok" | "expiring" | "expired" | "missing" | "unconfigured";
+  expires_at: string | null;
+  app_id: string | null;
+};
+export type FarmProblem = { code: string; level: "warn" | "bad"; message: string; fix: string };
+export type FarmStatus = {
+  checked_at: string | null;
+  appium: FarmService | null;
+  tunneld: FarmService | null;
+  signing: FarmSigning | null;
+  problems: FarmProblem[];
+};
+
 export type Size = { width: number; height: number };
 
 /** Appel JSON à l'API : lève une Error avec le message du serveur (`detail`) si la réponse n'est pas OK. */
@@ -40,6 +56,7 @@ export const api = {
   phones: () => call<Phone[]>("GET", "/api/phones"),
   events: (limit = 80) => call<LogEvent[]>("GET", `/api/events?limit=${limit}`),
   refresh: () => call<{ seen: number }>("POST", "/api/farm/refresh"),
+  farm: () => call<FarmStatus>("GET", "/api/farm/status"),
   take: (udid: string) => call<{ session_id: string; size: Size }>("POST", `${phone(udid)}/session`),
   release: (udid: string) => call("DELETE", `${phone(udid)}/session`),
   size: (udid: string) => call<Size>("GET", `${phone(udid)}/size`),

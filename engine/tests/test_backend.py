@@ -51,3 +51,22 @@ def test_migrations_are_idempotent(tmp_path):
     applied = {r[0] for r in conn.execute("SELECT name FROM schema_migrations")}
     assert applied == {p.stem for p in db.migration_files()}
     assert db.migrate(conn) == []
+
+
+def test_tools_are_found_where_uv_and_node_install_them(tmp_path, monkeypatch):
+    """Le diagnostic et les services cherchent aussi dans ~/.local/bin et ~/.local/node/bin : un PATH sans eux
+    (service launchd, autre terminal) ne fait plus croire qu'Appium manque."""
+    from pathlib import Path
+
+    from loopcast.farm.backend import _find_exe, find_exe
+
+    monkeypatch.setenv("PATH", str(tmp_path / "vide"))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    name = "outil-ferme-factice"
+    assert find_exe(name) is None and _find_exe(name) == name
+    tool = tmp_path / ".local" / "node" / "bin" / name
+    tool.parent.mkdir(parents=True)
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    assert find_exe(name) == str(tool) and _find_exe(name) == str(tool)
+    assert find_exe(str(tool)) == str(tool) and find_exe(str(tmp_path / "absent")) is None

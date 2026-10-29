@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 type Handler = (data: any) => void;
 
 // Événements diffusés par le serveur (deps.publish côté back) : un nouveau type s'ajoute ici.
-const KINDS = ["phones", "screen", "log", "apps", "strategy", "content", "diffusion", "jobs", "providers"];
+const KINDS = ["phones", "screen", "log", "farm", "apps", "strategy", "content", "diffusion", "jobs", "providers"];
 
 type Live = { online: boolean; subscribe: (kind: string, fn: Handler) => () => void };
 const LiveContext = createContext<Live | null>(null);

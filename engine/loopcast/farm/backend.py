@@ -61,19 +61,29 @@ class BackendError(RuntimeError):
     pass
 
 
-def _find_exe(exe: str) -> str:
-    """Le PATH d'un service launchd ou d'un terminal n'a pas toujours ~/.local/bin :
-    on cherche aussi à côté de l'interpréteur (extra [ios] installé dans le venv)."""
+def find_exe(exe: str) -> str | None:
+    """Chemin d'un outil de la ferme, ou None. Le PATH d'un service launchd ou d'un terminal n'a pas toujours
+    ~/.local/bin (uv, pymobiledevice3) ni ~/.local/node/bin (Node et Appium installés sans Homebrew) : on cherche
+    aussi là, à côté de l'interpréteur (extra [ios] installé dans le venv) et dans Homebrew."""
     import shutil
     import sys
     from pathlib import Path
 
-    if "/" in exe or shutil.which(exe):
-        return exe
-    for candidate in (Path(sys.executable).parent / exe, Path.home() / ".local" / "bin" / exe):
-        if candidate.exists():
-            return str(candidate)
-    return exe
+    if "/" in exe:
+        return exe if Path(exe).exists() else None
+    found = shutil.which(exe)
+    if found:
+        return found
+    home = Path.home()
+    for folder in (Path(sys.executable).parent, home / ".local" / "bin", home / ".local" / "node" / "bin",
+                   Path("/opt/homebrew/bin"), Path("/usr/local/bin")):
+        if (folder / exe).exists():
+            return str(folder / exe)
+    return None
+
+
+def _find_exe(exe: str) -> str:
+    return find_exe(exe) or exe
 
 
 class PyMobileDeviceBackend:

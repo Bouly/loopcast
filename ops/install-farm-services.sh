@@ -5,6 +5,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Outils installés sans Homebrew (docs/ferme-iphone.md) : ~/.local/bin (uv, pymobiledevice3) et
+# ~/.local/node/bin (Node, Appium). Ajoutés ici, ils sont trouvés depuis n'importe quel shell, et les
+# services les gardent : leur PATH est celui de ce script.
+export PATH="$HOME/.local/bin:$HOME/.local/node/bin:$PATH"
 PMD3="$(command -v pymobiledevice3 || true)"
 APPIUM="$(command -v appium || true)"
 [[ -n "$PMD3" ]] || { echo "pymobiledevice3 introuvable (pipx install pymobiledevice3)"; exit 1; }

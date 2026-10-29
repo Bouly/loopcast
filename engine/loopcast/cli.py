@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import shutil
 import subprocess
 import sys
 import threading
@@ -123,13 +122,20 @@ def cmd_farm_screenshot(args) -> int:
 
 def cmd_farm_doctor(args) -> int:
     """Vérifie tout ce qu'il faut sur le Mac de la ferme, avec la marche à suivre pour chaque manque."""
+    import os
+    from datetime import datetime, timezone
+
+    from loopcast.farm import health
+    from loopcast.farm.backend import find_exe
+
     config, _conn = _setup(args)
     ok = True
 
-    def check(label: str, passed: bool, fix: str) -> None:
+    def check(label: str, passed: bool, fix: str, *, warn: bool = False) -> None:
+        """✓ en ordre, ✗ bloquant (code de sortie 1), ! à surveiller sans bloquer."""
         nonlocal ok
-        ok &= passed
-        print(f"{'✓' if passed else '✗'} {label}" + ("" if passed else f"\n    → {fix}"))
+        ok &= passed or warn
+        print(f"{'✓' if passed else '!' if warn else '✗'} {label}" + ("" if passed else f"\n    → {fix}"))
 
     def run(*cmd: str) -> str | None:
         try:
@@ -142,28 +148,47 @@ def cmd_farm_doctor(args) -> int:
     xcode = run("xcodebuild", "-version")
     check(f"Xcode ({xcode.splitlines()[0] if xcode else 'absent'})", bool(xcode),
           "installer Xcode depuis l'App Store, puis : sudo xcode-select -s /Applications/Xcode.app")
-    check("pymobiledevice3", shutil.which(config.farm.pymobiledevice3) is not None,
+    check("pymobiledevice3", find_exe(config.farm.pymobiledevice3) is not None,
           "uv tool install --python 3.12 pymobiledevice3")
-    try:
-        httpx.get("http://127.0.0.1:49151/", timeout=3)
-        tunneld = True
-    except httpx.HTTPError:
-        tunneld = False
-    check("tunneld (iOS 17+ : captures, mode développeur)", tunneld,
+    http = httpx.Client(timeout=3)
+    tunneld = health.check_tunneld(config.farm.tunneld_url, http)
+    check(f"tunneld (iOS 17+ : captures, mode développeur) : {tunneld.detail}", tunneld.ok,
           "sudo pymobiledevice3 remote tunneld  (à lancer au démarrage, voir ops/)")
-    check("Appium", shutil.which("appium") is not None, "npm install -g appium  (Node dans ~/.local/node, voir docs/ferme-iphone.md)")
+    appium = find_exe("appium")
+    check(f"Appium ({appium or 'absent'})", appium is not None,
+          "npm install -g appium  (Node dans ~/.local/node, voir docs/ferme-iphone.md)")
     drivers = ""
-    if shutil.which("appium"):   # appium écrit cette liste sur stderr selon les versions
-        p = subprocess.run(["appium", "driver", "list", "--installed"], capture_output=True, text=True, timeout=60)
-        drivers = p.stdout + p.stderr
+    if appium:   # appium écrit cette liste sur stderr selon les versions ; il lui faut node, rangé à côté de lui
+        env = {**os.environ, "PATH": f"{Path(appium).parent}{os.pathsep}{os.environ.get('PATH', '')}"}
+        try:
+            p = subprocess.run([appium, "driver", "list", "--installed"], capture_output=True, text=True,
+                               timeout=60, env=env)
+            drivers = p.stdout + p.stderr
+        except (OSError, subprocess.TimeoutExpired):
+            pass
     check("Driver XCUITest", "xcuitest" in drivers, "appium driver install xcuitest")
-    try:
-        status = httpx.get(f"{config.farm.appium_url}/status", timeout=3).status_code == 200
-    except httpx.HTTPError:
-        status = False
-    check(f"Serveur Appium ({config.farm.appium_url})", status, "appium  (à lancer au démarrage, voir ops/)")
-    check("Signature WebDriverAgent (farm.xcode_org_id)", bool(config.farm.xcode_org_id),
+    server = health.check_appium(config.farm.appium_url, http)
+    check(f"Serveur Appium ({config.farm.appium_url}) : {server.detail}", server.ok,
+          "appium  (à lancer au démarrage, voir ops/)")
+    check("Team ID Apple (farm.xcode_org_id)", bool(config.farm.xcode_org_id),
           "renseigner farm.xcode_org_id (Team ID Apple Developer) dans config/settings.yaml")
+    if config.farm.xcode_org_id:
+        now = datetime.now(timezone.utc)
+        signing = health.signing_status(config, now)
+        resign = "docs/ferme-iphone.md, « Refaire la signature »"
+        if signing.expires_at is None:
+            check("Signature WebDriverAgent : aucun profil trouvé", False,
+                  "normal avant la première prise en main : Xcode le crée à ce moment-là", warn=True)
+        else:
+            date = health.date_text(signing.expires_at, health.farm_tz(config))
+            left = health.remaining_text(signing.expires_at, now)
+            if signing.state == "expired":
+                check(f"Signature WebDriverAgent : expirée le {date}", False, f"la refaire : {resign}")
+            elif signing.state == "expiring":
+                check(f"Signature WebDriverAgent : expire le {date} ({left})", False,
+                      f"la refaire avant cette date : {resign}", warn=True)
+            else:
+                check(f"Signature WebDriverAgent : valable jusqu'au {date} ({left})", True, "")
     declared = [p for p in config.phones if p.udid]
     check(f"iPhones déclarés avec UDID ({len(declared)}/{len(config.phones)})", bool(declared),
           "brancher l'iPhone, `python -m loopcast farm list`, copier l'UDID dans config/devices.yaml")

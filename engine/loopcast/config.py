@@ -46,6 +46,7 @@ class FarmSettings:
     backend: str = "pymobiledevice3"        # pymobiledevice3 | fake
     pymobiledevice3: str = "pymobiledevice3"
     appium_url: str = "http://127.0.0.1:4723"
+    tunneld_url: str = "http://127.0.0.1:49151"
     poll_seconds: int = 15
     thumb_seconds: int = 5                  # fréquence des vignettes d'écran du dashboard
     battery_low: int = 25
@@ -54,6 +55,7 @@ class FarmSettings:
     mjpeg_base_port: int = 9100
     xcode_org_id: str | None = None
     wda_bundle_id: str | None = None
+    signing_warn_days: int = 3              # alerte avant l'expiration de la signature de WebDriverAgent
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> FarmSettings:

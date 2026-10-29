@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from loopcast.config import Config
 from loopcast.farm.backend import DeviceBackend
 from loopcast.farm.control import BUNDLES, ControlError, PhoneController
+from loopcast.farm.health import FARM_EVENT_KINDS, make_checks, status_dict
 from loopcast.farm.live import EventBus, ScreenCache
 from loopcast.farm.supervisor import Supervisor, list_phones
 from loopcast.notify import is_alert, notify
@@ -152,7 +153,7 @@ def create_app(
     modules.load_all()
     controller = controller or PhoneController(config, conn)
     bus = EventBus()
-    supervisor = Supervisor(config, conn, backend)
+    supervisor = Supervisor(config, conn, backend, checks=make_checks(config))
     screens = ScreenCache(conn, backend, controller, bus)
     stop = threading.Event()
 
@@ -162,12 +163,16 @@ def create_app(
             if is_alert(kind):
                 notify("Loopcast · ferme", message, config.settings.get("notify"))
 
+    def on_tick(result) -> None:
+        on_events(result.events)
+        bus.publish("phones", {"seen": result.seen})
+        if result.farm_changed:
+            bus.publish("farm", {})
+
     def supervise_loop() -> None:
         while not stop.is_set():
             try:
-                result = supervisor.tick()
-                on_events(result.events)
-                bus.publish("phones", {"seen": result.seen})
+                on_tick(supervisor.tick())
             except Exception:
                 pass   # déjà journalisé par le superviseur ; la boucle continue
             stop.wait(config.farm.poll_seconds)
@@ -232,9 +237,16 @@ def create_app(
     @app.post("/api/farm/refresh")
     def refresh():
         result = supervisor.tick()
-        on_events(result.events)
-        bus.publish("phones", {"seen": result.seen})
+        on_tick(result)
         return {"seen": result.seen, "events": len(result.events)}
+
+    @app.get("/api/farm/status")
+    def farm_status():
+        """Appium, tunneld, signature de WebDriverAgent, et les problèmes de la ferme en cours."""
+        health = supervisor.health
+        if health is None and supervisor.checks is not None:     # avant le premier tour de supervision
+            health = supervisor.checks.check(supervisor.clock())
+        return status_dict(health, supervisor.farm_problems, config)
 
     @app.get("/api/events")
     def events(limit: int = 100, phone: str | None = None):
@@ -242,15 +254,17 @@ def create_app(
         if phone:
             rows = conn.execute(
                 "SELECT * FROM events WHERE phone_udid=? ORDER BY id DESC LIMIT ?", (phone, limit)).fetchall()
-        else:
+        else:   # le journal de la ferme : les iPhones, et la ferme elle-même (Appium, tunneld, signature)
+            farm_kinds = ("farm_error", *FARM_EVENT_KINDS)
             rows = conn.execute(
-                "SELECT * FROM events WHERE phone_udid IS NOT NULL OR kind='farm_error' ORDER BY id DESC LIMIT ?",
-                (limit,)).fetchall()
+                f"SELECT * FROM events WHERE phone_udid IS NOT NULL OR kind IN ({','.join('?' * len(farm_kinds))}) "
+                "ORDER BY id DESC LIMIT ?", (*farm_kinds, limit)).fetchall()
         return [dict(r) for r in rows]
 
     @app.get("/api/live")
     async def live(request: Request):
-        """Flux SSE : `phones` (l'état a changé), `screen` (nouvelle vignette), `log` (journal)."""
+        """Flux SSE : `phones` (l'état a changé), `screen` (nouvelle vignette), `log` (journal), `farm` (Appium,
+        tunneld ou signature ont changé)."""
         queue = bus.subscribe()
 
         async def body():

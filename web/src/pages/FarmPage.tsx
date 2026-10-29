@@ -2,6 +2,7 @@ import { Alert02Icon, RefreshIcon, Search01Icon } from "@hugeicons/core-free-ico
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityLog } from "../ActivityLog";
 import { api, type Phone } from "../api";
+import { FarmServices } from "../FarmServices";
 import { PhoneDrawer } from "../PhoneDrawer";
 import { PhoneTable } from "../PhoneTable";
 import { Icon } from "../ui";
@@ -44,7 +45,7 @@ function useHashSelection(phones: Phone[]) {
 }
 
 export function FarmPage() {
-  const { phones, events, error, loaded, reload } = useFarm();
+  const { phones, events, farm, error, loaded, reload, reloadFarm } = useFarm();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -67,7 +68,7 @@ export function FarmPage() {
   const refresh = async () => {
     setRefreshing(true);
     await api.refresh().catch(() => {});
-    await reload();
+    await Promise.all([reload(), reloadFarm()]);
     setRefreshing(false);
   };
 
@@ -101,6 +102,8 @@ export function FarmPage() {
             </div>
           </div>
         )}
+
+        <FarmServices farm={farm} />
 
         <div className="toolbar">
           <div className="seg" role="group" aria-label="Filtrer par état">

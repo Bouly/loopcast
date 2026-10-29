@@ -97,3 +97,15 @@ def test_background_jobs_are_pushed_live(config, conn, backend, clock):
     with TestClient(create_app(config, conn, backend, db_path=":memory:")):
         assert len(jobs.LISTENERS) == 1                    # branché pendant que le serveur tourne…
     assert jobs.LISTENERS == []                            # …et retiré à l'arrêt
+
+
+def test_farm_status_and_farm_events_in_the_log(api, conn):
+    """La page Ferme lit Appium, tunneld et la signature ; son journal montre aussi les alertes de la ferme."""
+    status = api.get("/api/farm/status").json()
+    assert status["appium"] == {"ok": True, "detail": "prêt (démo)"} and status["tunneld"]["ok"]
+    assert status["signing"]["state"] == "ok" and status["problems"] == []
+    for kind, message in (("problem_appium_down", "Appium ne répond pas"), ("ideas.generated", "pas pour la ferme")):
+        conn.execute("INSERT INTO events(at, kind, message) VALUES (?,?,?)",
+                     ("2026-10-29T17:00:00+00:00", kind, message))
+    kinds = [e["kind"] for e in api.get("/api/events").json()]
+    assert "problem_appium_down" in kinds and "ideas.generated" not in kinds

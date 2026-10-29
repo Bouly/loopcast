@@ -324,12 +324,12 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [x] Fichiers d'exemple : marque, iPhones, réglages
 - [ ] Démarches plateformes : app TikTok + audit, app Meta, bucket + domaine (attention : les règles de TikTok refusent la
       publication directe « pour ses propres comptes ou ceux de son équipe », voir `docs/strategie/sources.md` §10)
-- [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — validé sur un iPhone 14 Pro Max le 29/10/2026
+- [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — validé sur un iPhone 14 Pro Max le 29/10/2026 ; alertes Appium, tunneld et signature de WebDriverAgent (page Ferme, notifications, `farm doctor`, §5 du guide) le 29/10/2026
 - [x] `engine/` : config, DB (migrations en fichiers), file de tâches durable, coûts et plafonds, CLI
 - [x] `engine/` : formats (catalogue, validation, 4 formats Remotion + 4 formats à plans)
-- [x] Génération LLM : compréhension de l'app (fiche + questions), stratégie (une voix par téléphone), idées validées — démo testée, **vrai Claude pas encore essayé (pas de clé)**
+- [x] Génération LLM : compréhension de l'app (fiche + questions), stratégie (une voix par téléphone), idées validées — démo testée ; clé Claude branchée et acceptée le 29/10/2026, **aucune génération réelle encore**
 - [x] Rendu piloté depuis Python + QA auto (durée, format, poids, images noires ou figées)
-- [x] Générateurs vidéo IA (fal.ai + faux fournisseur, routage par budget) — **pas encore essayés en vrai (pas de clé)**
+- [x] Générateurs vidéo IA (fal.ai + faux fournisseur, routage par budget) — clé fal.ai branchée le 29/10/2026, premier plan réel généré (MiniMax H3 Turbo, 4 s, 0,16 $)
 - [x] API FastAPI + front React : Apps, Validation, Calendrier, Production, Ferme ; revue de cohérence du 29/10 corrigée
       (stock « à valider » / « prête à publier », un seul titre par vidéo et liens idée → vidéo → post, zones
       tactiles et champs à 16 px, notifications communes, heures relatives ou dans le fuseau des comptes)
@@ -338,7 +338,7 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [x] Planification + régulateur + exécution des posts (3 par jour et par compte après montée en charge, plafond 5)
 - [x] Métriques (saisie manuelle) + boucle des gagnants
 - [x] Autopilote + chien de garde + notifications ; lancé au démarrage par le service `com.loopcast.serve` (`ops/`), qui fait tourner l'API, la file de tâches et l'autopilote
-- [x] Tests (environ 390, tous verts, sans réseau ni clé)
+- [x] Tests (environ 400, tous verts, sans réseau ni clé)
 - [ ] Publisher iPhone via Appium : écrit, **non vérifié**, désactivé (raccourci iOS « Loopcast Import » à créer)
 
 ## 9. Marché US : la voie qui tient

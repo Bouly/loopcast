@@ -108,6 +108,37 @@ Pièges rencontrés lors de ce premier test, à refaire sur chaque nouveau Mac o
   défilement en 0,7 s, toucher en 0,4 s. Si WebDriverAgent reste bloqué malgré tout : rendre la main, redémarrer
   Appium, reprendre la main.
 
+## 5. Alertes de la ferme
+
+Un iPhone « Prêt » ne suffit pas : le pilotage dépend aussi de trois choses sur le Mac, que la supervision vérifie
+à chaque tour (`engine/loopcast/farm/health.py`) et que la page Ferme affiche sous son titre.
+
+| Ce qui est suivi | Alerte quand | Effet si on laisse faire |
+|---|---|---|
+| **Appium** (`farm.appium_url`, `/status`) | il ne répond pas deux tours d'affilée (≈ 30 s) | aucune prise en main |
+| **tunneld** (`farm.tunneld_url`) | il ne répond pas deux tours d'affilée | ni captures ni mode développeur (iOS 17 et plus) |
+| **Signature de WebDriverAgent** (profil de Xcode) | elle expire dans `farm.signing_warn_days` jours (3 par défaut), puis une seconde fois quand elle a expiré | iOS refuse de lancer WebDriverAgent : plus de pilotage |
+
+Chaque alerte part une fois (journal de la page, notification macOS et ntfy) et un message « répond de nouveau » ou
+« renouvelée » la clôt ; un redémarrage de Loopcast ne la répète pas. La signature est lue dans les profils de
+Xcode (`~/Library/Developer/Xcode/UserData/Provisioning Profiles`, et `~/Library/MobileDevice/Provisioning
+Profiles` pour les anciennes versions) : celui du lanceur `<farm.wda_bundle_id>.xctrunner` de l'équipe
+`farm.xcode_org_id` qui expire le plus tard. `python -m loopcast farm doctor` affiche la même date.
+
+### Refaire la signature de WebDriverAgent
+
+Avec un Apple ID gratuit, le profil dure 7 jours ; avec Apple Developer (99 €/an), un an. Pour en obtenir un nouveau :
+
+1. Vérifier que l'Apple ID est toujours connecté dans Xcode › Settings › Accounts.
+2. Brancher et déverrouiller un iPhone de la ferme.
+3. Supprimer le build de WebDriverAgent de cet iPhone : `rm -rf data/wda/<UDID>`.
+4. Dashboard › l'iPhone › **Prendre la main** : Appium recompile WebDriverAgent et Xcode crée un nouveau profil
+   (1 à 3 min).
+5. La page Ferme affiche la nouvelle date, et le journal « Signature de WebDriverAgent renouvelée ».
+
+Procédure déduite du fonctionnement de Xcode (signature automatique, `allowProvisioningDeviceRegistration`), pas
+encore éprouvée sur un profil expiré : à confirmer à la première expiration, le 4/11/2026 à 22 h 11, heure de Paris.
+
 ## Développer sans iPhone
 
 ```bash

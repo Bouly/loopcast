@@ -1,7 +1,8 @@
 """Supervision de la ferme : un tour = lister les iPhones, vérifier leur santé, noter les changements.
 
 Chaque tour met à jour la table `phones` et n'écrit un événement que lorsqu'un problème
-apparaît ou disparaît (pas de bruit à chaque tour).
+apparaît ou disparaît (pas de bruit à chaque tour). Avec `checks`, le tour vérifie aussi ce dont dépend
+le pilotage hors des iPhones : Appium, tunneld et la signature de WebDriverAgent (health.py).
 """
 
 from __future__ import annotations
@@ -16,10 +17,15 @@ from typing import Callable
 
 from loopcast.config import Config
 from loopcast.farm.backend import BackendError, DeviceBackend, model_name
+from loopcast.farm.health import (FARM_PROBLEMS, Checks, FarmHealth, family, farm_tz, problem_message,
+                                  resolved_message)
 
 log = logging.getLogger(__name__)
 
 Clock = Callable[[], datetime]
+
+# Un service doit manquer deux tours d'affilée avant l'alerte : un redémarrage d'Appium ne réveille personne.
+SERVICE_DOWN_TICKS = 2
 
 # Code → message affiché dans le dashboard et les notifications
 PROBLEMS = {
@@ -43,7 +49,8 @@ def iso(dt: datetime) -> str:
 @dataclass
 class TickResult:
     seen: int
-    events: list[tuple[str, str, str]]   # (udid, kind, message)
+    events: list[tuple[str | None, str, str]]   # (udid, ou None pour la ferme ; kind ; message)
+    farm_changed: bool = False                  # Appium, tunneld ou la signature ont changé : la page se met à jour
 
 
 def add_event(conn: sqlite3.Connection, at: datetime, udid: str | None, kind: str, message: str) -> None:
@@ -60,12 +67,32 @@ def _status(problems: list[str]) -> str:
     return "attention" if problems else "ok"
 
 
+def active_farm_problems(conn: sqlite3.Connection) -> set[str]:
+    """Les problèmes de la ferme signalés et pas encore résolus, d'après le journal : après un redémarrage, ils
+    ne déclenchent pas une nouvelle alerte. Dans chaque famille, le dernier événement fait foi."""
+    active: set[str] = set()
+    for fam in sorted({family(c) for c in FARM_PROBLEMS}):
+        kinds = [f"{p}_{c}" for c in FARM_PROBLEMS if family(c) == fam for p in ("problem", "resolved")]
+        row = conn.execute(
+            f"SELECT kind FROM events WHERE phone_udid IS NULL AND kind IN ({','.join('?' * len(kinds))}) "
+            "ORDER BY id DESC LIMIT 1", kinds).fetchone()
+        if row and row["kind"].startswith("problem_"):
+            active.add(row["kind"].removeprefix("problem_"))
+    return active
+
+
 class Supervisor:
-    def __init__(self, config: Config, conn: sqlite3.Connection, backend: DeviceBackend, clock: Clock = utcnow):
+    def __init__(self, config: Config, conn: sqlite3.Connection, backend: DeviceBackend, clock: Clock = utcnow,
+                 checks: Checks | None = None):
         self.config = config
         self.conn = conn
         self.backend = backend
         self.clock = clock
+        self.checks = checks                    # santé de la ferme (health.py) ; None : les iPhones seulement
+        self.health: FarmHealth | None = None   # dernière vérification d'Appium, de tunneld et de la signature
+        self.farm_problems: set[str] = set()    # problèmes de la ferme en cours (codes de FARM_PROBLEMS)
+        self._farm_loaded = False
+        self._failures: dict[str, int] = {}     # tours d'affilée sans réponse, par service
         self._lock = threading.Lock()
 
     def tick(self) -> TickResult:
@@ -75,18 +102,20 @@ class Supervisor:
     def _tick(self) -> TickResult:
         now = self.clock()
         farm = self.config.farm
-        events: list[tuple[str, str, str]] = []
+        events: list[tuple[str | None, str, str]] = []
 
-        def emit(udid: str, kind: str, message: str) -> None:
+        def emit(udid: str | None, kind: str, message: str) -> None:
             add_event(self.conn, now, udid, kind, message)
             events.append((udid, kind, message))
+
+        farm_changed = self._farm_tick(now, emit) if self.checks is not None else False
 
         try:
             devices = self.backend.list_devices()
         except BackendError as e:
             log.error("liste des iPhones impossible : %s", e)
             add_event(self.conn, now, None, "farm_error", f"Liste des iPhones impossible : {e}")
-            return TickResult(0, [(None, "farm_error", str(e))])
+            return TickResult(0, [*events, (None, "farm_error", str(e))], farm_changed)
 
         known = {r["udid"]: r for r in self.conn.execute("SELECT * FROM phones")}
         seen: set[str] = set()
@@ -173,7 +202,51 @@ class Supervisor:
                                                   f"{farm.offline_alert_minutes} min")
 
         # Les iPhones de devices.yaml jamais vus : rien à signaler tant qu'ils ne sont pas branchés.
-        return TickResult(len(seen), events)
+        return TickResult(len(seen), events, farm_changed)
+
+    def _farm_tick(self, now: datetime, emit: Callable[[str | None, str, str], None]) -> bool:
+        """Appium, tunneld, signature : un événement quand un problème apparaît, s'aggrave ou disparaît.
+        Renvoie True si ce que la page Ferme affiche a changé."""
+        try:
+            health = self.checks.check(now)
+        except Exception:  # une vérification ratée n'arrête pas la supervision des iPhones
+            log.exception("santé de la ferme illisible")
+            return False
+        if not self._farm_loaded:
+            self.farm_problems = active_farm_problems(self.conn)
+            self._farm_loaded = True
+        previous, self.health = self.health, health
+
+        wanted: set[str] = set()
+        for code, service in (("appium_down", health.appium), ("tunneld_down", health.tunneld)):
+            self._failures[code] = 0 if service.ok else self._failures.get(code, 0) + 1
+            if not service.ok and (code in self.farm_problems or self._failures[code] >= SERVICE_DOWN_TICKS):
+                wanted.add(code)
+        if health.signing.state in ("expiring", "expired"):
+            wanted.add(f"signing_{health.signing.state}")
+        elif health.signing.state != "ok":     # aucun profil lisible : on garde ce qui était signalé
+            wanted |= {c for c in self.farm_problems if family(c) == "signing"}
+
+        tz = farm_tz(self.config)
+        emitted = False
+        for fam in sorted({family(c) for c in FARM_PROBLEMS}):
+            old = {c for c in self.farm_problems if family(c) == fam}
+            new = {c for c in wanted if family(c) == fam}
+            if old == new:
+                continue
+            emitted = True
+            if new:     # apparition, ou aggravation (« expire bientôt » → « expirée »)
+                code = new.pop()
+                emit(None, f"problem_{code}", problem_message(code, health, tz))
+            else:
+                code = old.pop()
+                emit(None, f"resolved_{code}", resolved_message(code, health, tz))
+        self.farm_problems = wanted
+
+        def shown(h: FarmHealth | None):
+            return h and (h.appium, h.tunneld, h.signing.state, h.signing.expires_at)
+
+        return emitted or shown(previous) != shown(health)
 
     def run_forever(self, stop: threading.Event, on_events: Callable[[list], None] | None = None) -> None:
         log.info("supervision de la ferme : un tour toutes les %s s", self.config.farm.poll_seconds)
