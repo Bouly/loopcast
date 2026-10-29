@@ -52,7 +52,9 @@ function PropsView({ json }: { json: string }) {
     if (typeof v === "object") {
       const o = v as Record<string, unknown>;
       if ("text" in o) return `${o.from ? `${o.from === "me" ? "Moi" : "Ami"} : ` : ""}${show(o.text)}`;
-      return Object.values(o).map(show).filter(Boolean).join(", ");
+      const shot = "asset_id" in o && o.asset_id != null ? ` (capture n° ${o.asset_id})` : "";
+      const rest = Object.entries(o).filter(([k]) => k !== "asset_id").map(([, x]) => show(x)).filter(Boolean);
+      return rest.join(", ") + shot;
     }
     return "";
   };
@@ -336,10 +338,6 @@ export function IdeasTab({ app, data, reload, go }: TabProps) {
 
   return (
     <div className="ax-stack">
-      {app.status === "paused" && (
-        <Notice tone="idle" title="App en pause : aucune nouvelle idée n'est générée." />
-      )}
-
       {stock && stock.phones.length > 0 && (
         <section className="ax-card">
           <div className="ax-card-head">

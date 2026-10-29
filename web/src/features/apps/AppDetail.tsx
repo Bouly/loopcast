@@ -1,5 +1,5 @@
 import { ArrowLeft01Icon, Link01Icon, PauseIcon, PencilEdit02Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, match, navigate, usePath } from "../../router";
 import { Icon } from "../../ui";
 import { appsApi, strategyApi, type AppOverview, type Job } from "./api";
@@ -111,16 +111,20 @@ function AppDetail({ id }: { id: string }) {
   const strategyRunning = (strategy?.pending_jobs.length ?? 0) > 0;
   const strategyError = strategyRunning ? null : strategyJob(id, jobs).error;
   const proposed = (data.ideas ?? []).filter((i) => i.status === "proposed").length;
-  const ready = Boolean(app && strategy);
+  const ready = Boolean(app && (strategy || error)); // sans la stratégie (erreur), on n'attend pas pour l'onglet
   const tab: TabKey | null = isTab(tabParam) ? tabParam : app && ready ? defaultTab(app, data) : null;
 
   useTitle(app?.name ?? null);
 
   const go = useCallback((t: TabKey) => navigate(`/apps/${encodeURIComponent(id)}/${t}`), [id]);
 
-  // Quitter l'onglet de la fiche referme son éditeur.
+  // Changer d'onglet ramène en haut de la page (une action finie en bas de l'onglet y mène aussi), et
+  // quitter l'onglet de la fiche referme son éditeur.
+  const shownTab = useRef(tab);
   useEffect(() => {
     if (tab !== "fiche") setBriefEditing(false);
+    if (shownTab.current && tab && shownTab.current !== tab) window.scrollTo({ top: 0 });
+    shownTab.current = tab;
   }, [tab]);
 
   /** Une action : un seul geste à la fois, erreur affichée en haut de la page. */
@@ -186,18 +190,17 @@ function AppDetail({ id }: { id: string }) {
     if (tab === "fiche" && briefEditing) return null; // l'éditeur porte son propre « Enregistrer »
     if (app.status === "paused") return { label: "Reprendre l'app", run: resume };
     if (analysisRunning) return null;
-    if (analysisError) return { label: "Relancer l'analyse", run: analyze };
+    const material = hasMaterial(app);
+    const launch = (label: string): Primary => ({
+      label,
+      run: analyze,
+      disabled: !material,
+      hint: material ? undefined : "Ajoutez d'abord une description, un lien ou une capture.",
+    });
+    if (analysisError) return launch("Relancer l'analyse");
     const open = app.counts.questions_open;
     if (open > 0) return tab === "questions" ? null : { label: `Répondre aux questions (${open})`, to: "questions" };
-    if (!app.brief) {
-      const ok = hasMaterial(app);
-      return {
-        label: "Lancer l'analyse",
-        run: analyze,
-        disabled: !ok,
-        hint: ok ? undefined : "Ajoutez d'abord une description, un lien ou une capture.",
-      };
-    }
+    if (!app.brief) return launch("Lancer l'analyse");
     if (!app.brief.approved_at) {
       const v = app.brief.version;
       return tab === "fiche" ? { label: `Approuver la fiche v${v}`, run: () => approveBrief(v) } : { label: "Relire la fiche", to: "fiche" };
@@ -240,7 +243,7 @@ function AppDetail({ id }: { id: string }) {
       />,
     );
   }
-  if (error) {
+  if (error && error !== actionError) {
     notices.push(
       <Notice
         key="error"
@@ -280,7 +283,15 @@ function AppDetail({ id }: { id: string }) {
   }
   if (strategyError) {
     notices.push(
-      <Notice key="strategy-failed" tone="bad" title="La stratégie n'a pas pu être préparée.">
+      <Notice
+        key="strategy-failed"
+        tone="bad"
+        title={
+          strategy?.current
+            ? "La nouvelle version de la stratégie n'a pas pu être préparée."
+            : "La stratégie n'a pas pu être préparée."
+        }
+      >
         {strategyError}
         {strategyHint(strategyError)}
       </Notice>,

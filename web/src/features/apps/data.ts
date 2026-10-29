@@ -94,9 +94,10 @@ export function useAppsList() {
   const [brands, setBrands] = useState<BrandFile[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const last = useRef({ apps: "", jobs: "" });
+  const last = useRef({ apps: "", jobs: "", at: 0 });
 
   const reload = useCallback(async () => {
+    last.current.at = Date.now();
     try {
       const [list, dead, strategy] = await Promise.all([
         appsApi.list(),
@@ -126,7 +127,7 @@ export function useAppsList() {
   useEffect(() => {
     void reload();
   }, [reload]);
-  useLive("open", () => void reload());
+  useLive("open", () => Date.now() - last.current.at > 2000 && void reload());
   useLive("apps", schedule);
   useLive("strategy", schedule);
 
@@ -189,30 +190,39 @@ export function useAppDetail(id: string) {
   const json = useRef<Partial<Record<Key, string>>>({});
   const seq = useRef<Partial<Record<Key, number>>>({});
   const lastJobs = useRef<Job[] | undefined>(undefined);
+  const lastOverview = useRef<AppOverview | undefined>(undefined);
+  const lastFull = useRef(0);
 
   /** Recharge les parties demandées ; renvoie celles qui ont changé. */
   const reload = useCallback(
     async (keys: Key[] = ALL): Promise<Set<Key>> => {
       const changed = new Set<Key>();
       const failures: string[] = [];
-      await Promise.all(
-        keys.map(async (key) => {
-          const n = (seq.current[key] = (seq.current[key] ?? 0) + 1);
-          try {
-            const value = await FETCH[key](id);
-            if (seq.current[key] !== n) return; // une réponse plus récente est déjà arrivée
-            if (key === "jobs") lastJobs.current = value as Job[];
-            const s = JSON.stringify(value);
-            if (json.current[key] === s) return;
-            json.current[key] = s;
-            changed.add(key);
-            setData((d) => ({ ...d, [key]: value }));
-          } catch (e) {
-            if (key === "overview" && e instanceof ApiError && e.status === 404) setNotFound(true);
-            else failures.push((e as Error).message);
-          }
-        }),
-      );
+      if (keys.length === ALL.length) lastFull.current = Date.now();
+      const fetchOne = async (key: Key) => {
+        const n = (seq.current[key] = (seq.current[key] ?? 0) + 1);
+        try {
+          // Pas de fiche d'après l'aperçu : inutile de la demander (le back répondrait 404).
+          const skip = key === "brief" && lastOverview.current?.brief === null;
+          const value = skip ? null : await FETCH[key](id);
+          if (seq.current[key] !== n) return; // une réponse plus récente est déjà arrivée
+          if (key === "jobs") lastJobs.current = value as Job[];
+          if (key === "overview") lastOverview.current = value as AppOverview;
+          const s = JSON.stringify(value);
+          if (json.current[key] === s) return;
+          json.current[key] = s;
+          changed.add(key);
+          setData((d) => ({ ...d, [key]: value }));
+        } catch (e) {
+          if (key === "overview" && e instanceof ApiError && e.status === 404) setNotFound(true);
+          else failures.push((e as Error).message);
+        }
+      };
+      await Promise.all(keys.map(fetchOne));
+      // La fiche a pu apparaître pendant ce rechargement (l'aperçu est arrivé en même temps) : on la lit.
+      if (keys.includes("brief") && lastOverview.current?.brief && json.current.brief === "null") {
+        await Promise.all((["brief", "versions"] as Key[]).map(fetchOne));
+      }
       setError(failures[0] ?? null);
       return changed;
     },
@@ -223,17 +233,21 @@ export function useAppDetail(id: string) {
     json.current = {};
     seq.current = {};
     lastJobs.current = undefined;
+    lastOverview.current = undefined;
     setData({});
     setNotFound(false);
     setError(null);
-    void reload();
+    // L'aperçu d'abord (l'en-tête s'affiche, et il dit s'il y a une fiche à lire), puis le reste.
+    lastFull.current = Date.now();
+    void reload(["overview"]).then(() => reload(ALL.filter((k) => k !== "overview")));
   }, [reload]);
 
   const scheduleApps = useDebounced(() => void reload(APPS_KEYS));
   const scheduleStrategy = useDebounced(() => void reload(STRATEGY_KEYS));
   // Les idées s'appellent « <app>-<langue>-<date>-<n> » : un événement d'idée concerne-t-il cette app ?
   const ideaOfThisApp = (ideaId: string) => ideaId.startsWith(`${id}-`) && /^(fr|en)-\d{8}-/.test(ideaId.slice(id.length + 1));
-  useLive("open", () => void reload());
+  // « open » arrive aussi à l'ouverture de la page, juste après le premier chargement : pas de doublon.
+  useLive("open", () => Date.now() - lastFull.current > 2000 && void reload());
   useLive("apps", (d: { id?: string }) => d?.id === id && scheduleApps());
   useLive("strategy", (d: { app_id?: string; idea_id?: string }) => {
     if (d?.app_id === id || (d?.idea_id && ideaOfThisApp(d.idea_id))) scheduleStrategy();

@@ -186,6 +186,7 @@
 .ax-table [role="listitem"]:last-child .row { border-bottom: 0; }
 .ax-table .row { min-height: 66px; }
 .ax-table .who .name { font-size: 14px; }
+.ax-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .ax-col-step { display: grid; gap: 3px; min-width: 0; }
 .ax-stage { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
 .ax-col-langs { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -251,11 +252,10 @@
   white-space: nowrap;
   color: var(--muted-foreground);
   text-decoration: none;
-  border-radius: var(--r-xs) var(--r-xs) 0 0;
 }
 .ax-tabs a:hover { color: var(--foreground); }
 .ax-tabs a[aria-current="page"] { color: var(--foreground); box-shadow: inset 0 -2px 0 var(--foreground); }
-.ax-tabs a:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.ax-tabs a:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: var(--r-xs); }
 .ax-tab-count {
   display: inline-flex;
   align-items: center;
@@ -528,9 +528,12 @@
 .ax-stock-body .problem { flex-basis: 100%; }
 .ax-toolbar { margin: 0; }
 /* Un choix segmenté trop large pour l'écran défile sur place au lieu d'élargir la page */
-.ax .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.ax .seg::-webkit-scrollbar { display: none; }
+.ax .seg { max-width: 100%; }
 .ax .seg button { flex: none; }
+@media (max-width: 640px) {
+  .ax .seg { overflow-x: auto; scrollbar-width: none; }
+  .ax .seg::-webkit-scrollbar { display: none; }
+}
 
 .ax-ideas { padding: 0; overflow: hidden; }
 .ax-idea { border-top: 1px solid var(--border); }
@@ -545,7 +548,7 @@
 .ax-idea-meta { font-size: 12.5px; overflow-wrap: anywhere; }
 .ax-idea-state { display: flex; align-items: center; gap: 10px; flex: none; }
 .ax-idea-chev { transition: transform 150ms var(--ease); }
-.ax-idea[open] .ax-idea-chev { transform: rotate(180deg); }
+.ax-idea[open] .ax-idea-chev, .ax-history[open] .ax-idea-chev { transform: rotate(180deg); }
 .ax-idea-body { display: grid; gap: 10px; padding: 12px 16px 16px; }
 .ax-idea-body .facts.ax-facts { margin-top: 0; }
 .ax-shot-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
@@ -557,6 +560,8 @@
 /* ---------- Panneau latéral (ajout et modification d'une app) ---------- */
 
 .ax-drawer { width: min(560px, 100vw); }
+.ax-drawer .drawer-head { flex-wrap: nowrap; align-items: flex-start; }
+.ax-drawer .drawer-head > div:first-child { flex: 1; min-width: 0; }
 .ax-drawer-body { flex: 1; overflow: auto; display: grid; gap: 16px; align-content: start; padding: 20px 20px 0; }
 .ax-drawer-foot {
   position: sticky;

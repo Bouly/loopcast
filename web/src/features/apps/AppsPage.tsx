@@ -48,7 +48,9 @@ function AppRow({ row }: { row: Row }) {
         <span className="who">
           <AppAvatar app={app} />
           <span className="who-text">
-            <span className="name">{app.name}</span>
+            <span className="name">
+              <span className="ax-clamp2">{app.name}</span>
+            </span>
             <span className="sub">{line || <span className="mono">{app.id}</span>}</span>
           </span>
         </span>

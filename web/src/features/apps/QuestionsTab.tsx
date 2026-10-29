@@ -1,5 +1,5 @@
-import { CheckmarkCircle02Icon, MessageQuestionIcon } from "@hugeicons/core-free-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown01Icon, CheckmarkCircle02Icon, MessageQuestionIcon } from "@hugeicons/core-free-icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { dateTime } from "../../format";
 import { Icon } from "../../ui";
 import { appsApi, type QuestionRow } from "./api";
@@ -156,6 +156,7 @@ function History({ closed }: { closed: QuestionRow[] }) {
     <details className="ax-card ax-history">
       <summary>
         Questions déjà traitées <span className="ax-tab-count">{closed.length}</span>
+        <Icon icon={ArrowDown01Icon} size={14} className="ax-idea-chev muted" />
       </summary>
       {rounds.map(([round, qs]) => (
         <section key={round} className="ax-history-round">
@@ -183,7 +184,6 @@ function History({ closed }: { closed: QuestionRow[] }) {
 export function QuestionsTab({ app, data, reload, analysisRunning, go, drafts }: TabProps & { drafts: Drafts }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const first = useRef<HTMLDivElement>(null);
   const questions = data.questions;
 
   if (!questions) {
@@ -234,20 +234,23 @@ export function QuestionsTab({ app, data, reload, analysisRunning, go, drafts }:
     return (
       <div className="ax-stack">
         <div className="ax-card">
-          <Empty icon={MessageQuestionIcon} title="Aucune question ouverte">
+          <Empty
+            icon={MessageQuestionIcon}
+            title="Aucune question ouverte"
+            actions={
+              app.brief && !analysisRunning ? (
+                <button type="button" className="btn" onClick={() => go("fiche")}>
+                  Voir la fiche produit
+                </button>
+              ) : undefined
+            }
+          >
             {analysisRunning
               ? "Claude travaille sur la fiche. S'il lui manque une information, ses questions arriveront ici."
               : !app.brief
                 ? "Les questions arrivent avec la première analyse, quand Claude a lu les sources et regardé les captures."
                 : "Tout ce que Claude a demandé a reçu une réponse ou a été passé."}
           </Empty>
-          {app.brief && !analysisRunning && (
-            <div className="ax-empty-actions ax-center">
-              <button type="button" className="btn" onClick={() => go("fiche")}>
-                Voir la fiche produit
-              </button>
-            </div>
-          )}
         </div>
         <History closed={closed} />
       </div>
@@ -259,7 +262,7 @@ export function QuestionsTab({ app, data, reload, analysisRunning, go, drafts }:
   );
 
   return (
-    <div className="ax-stack" ref={first}>
+    <div className="ax-stack">
       <p className="ax-intro">
         Claude a besoin de ces précisions pour écrire une stratégie juste. Répondez en une ligne, passez ce que vous ne
         savez pas : tout part en un seul envoi.
