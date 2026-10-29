@@ -1,6 +1,6 @@
 """Routes /api/diffusion et commandes `python -m loopcast diffusion …`."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -97,18 +97,25 @@ def test_cli_metrics_set(cli_env, clock, add_content, add_post, capsys):
 
 
 def test_cli_plan_calendar_tick(cli_env, clock, add_content, capsys):
+    """`--dry-run` sur la vraie base : la planification se simule (canal réel : ici le repli manuel, donc aux
+    heures de présence), mais rien ne part et rien n'est inventé. Avant : FakePublisher marquait le contenu
+    « posted » avec un faux identifiant et de fausses vues."""
     for i in range(3):
         add_content(f"c{i}")
     assert cli.main(["diffusion", "plan", "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "phone-1:tiktok" in out and "quota 3" in out and "nouveaux 3" in out
     assert cli.main(["diffusion", "calendar", "--days", "1"]) == 0
-    assert capsys.readouterr().out.count("scheduled") == 6
-    clock.advance(hours=3)                                         # 09:00 à Paris : le créneau du matin est passé
+    planned = cli_env.execute("SELECT COUNT(*) FROM posts WHERE status='scheduled'").fetchone()[0]
+    assert planned >= 3 and capsys.readouterr().out.count("scheduled") == planned
+    first = cli_env.execute("SELECT id, scheduled_at FROM posts ORDER BY scheduled_at, id LIMIT 1").fetchone()
+    clock.now = datetime.fromisoformat(first["scheduled_at"]) + timedelta(minutes=1)
     assert cli.main(["diffusion", "tick", "--dry-run"]) == 0
-    statuses = dict(cli_env.execute("SELECT account_id, status FROM posts ORDER BY scheduled_at LIMIT 1").fetchall())
-    assert statuses == {"phone-1:tiktok": "posted"}                # parti dans le tour, par FakePublisher
     assert '"diffusion.publish #' in capsys.readouterr().out
+    post = get_post(cli_env, first["id"])
+    assert post.status == "dry_run" and post.external_id is None and post.posted_at is None and post.views is None
+    assert "essai à blanc" in post.log[-1]["msg"] and "rien n'est parti" in post.log[-1]["msg"]
+    assert cli_env.execute("SELECT COUNT(*) FROM posts WHERE status='posted'").fetchone()[0] == 0
     assert cli.main(["diffusion", "accounts"]) == 0
     assert "phone-1:tiktok" in capsys.readouterr().out
 

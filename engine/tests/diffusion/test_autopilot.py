@@ -131,3 +131,41 @@ def test_never_more_than_five_a_day_whatever_the_strategy(tmp_path, clock, media
                         VALUES (?, 'habitudo', 'notes-app', 'fr', 'approved', ?)""", (f"c{i}", f'["{path}"]'))
     simulate(conn, cfg, clock, Publishers(cfg, override=FakePublisher()), until=utc(2026, 11, 16, 23))
     assert conn.execute("SELECT COUNT(*) FROM posts WHERE status='posted'").fetchone()[0] == 5
+
+
+def test_dry_run_publishes_nothing_and_invents_nothing(tmp_path, conn, clock, add_content):
+    """diffusion.dry_run sur la vraie base, deux jours d'autopilote : le journal dit ce qui serait parti, au
+    rythme réel (jamais plus que le quota du jour, un contenu une fois par jour), mais aucun contenu n'est
+    consommé, aucune vue n'est inventée, ni gagnant ni variation (Claude), régulateur intact.
+    Avant : FakePublisher marquait les contenus « posted » avec de fausses vues qui pilotaient le reste."""
+    from loopcast.diffusion import services as diffusion_services
+    from loopcast.diffusion.publishers import DryRunPublisher
+    from loopcast.diffusion.store import get_account, read_log
+
+    for i in range(8):
+        add_content(f"c{i}", fmt=["notes-app", "chat-story", "hook-demo"][i % 3])
+    dry = make_config(tmp_path, settings={"diffusion": {"dry_run": True}})
+    pubs = diffusion_services.build(dry)["publishers"]
+    assert isinstance(pubs.for_account(get_account(conn, "phone-1:tiktok")), DryRunPublisher)
+    simulate(conn, dry, clock, pubs, until=utc(2026, 11, 17, 23))
+
+    rows = conn.execute("SELECT * FROM posts").fetchall()
+    assert rows and {r["status"] for r in rows} <= {"dry_run", "scheduled"}
+    assert all(r["external_id"] is None and r["posted_at"] is None and r["views"] is None for r in rows)
+    runs = [(r["account_id"], e["at"]) for r in rows for e in read_log(r["log"]) if "essai à blanc" in e["msg"]]
+    assert runs
+    per_day: dict = {}
+    for account_id, at in runs:
+        day = datetime.fromisoformat(at).astimezone(PARIS).date()
+        per_day[(account_id, day)] = per_day.get((account_id, day), 0) + 1
+    assert max(per_day.values()) <= 3                                    # la cadence réelle, pas plus
+    for r in rows:                                                       # un contenu au plus une fois par jour
+        days = [datetime.fromisoformat(e["at"]).astimezone(PARIS).date() for e in read_log(r["log"])
+                if "essai à blanc" in e["msg"]]
+        assert len(days) == len(set(days))
+    for account_id in ("phone-1:tiktok", "phone-1:instagram"):
+        assert len(planner.candidates(conn, get_account(conn, account_id))) == 8    # stock intact
+    assert conn.execute("SELECT COUNT(*) FROM jobs WHERE kind='ideas.variations'").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM posts WHERE winner_at IS NOT NULL").fetchone()[0] == 0
+    st = conn.execute("SELECT state, quota FROM account_state WHERE account_id='phone-1:tiktok'").fetchone()
+    assert (st["state"], st["quota"]) == ("active", 3)

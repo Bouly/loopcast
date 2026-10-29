@@ -11,6 +11,10 @@ Pour chaque téléphone, dans une transaction (un seul planificateur à la fois)
    posts ; à égalité, les variations de gagnants, puis le plus ancien.
 3. Instagram du même téléphone : le même contenu que TikTok, à un créneau décalé (30 à 90 min), dans la
    limite de son propre quota ; s'il lui reste de la place, des contenus à lui.
+
+Essai à blanc (statut « dry_run », diffusion.dry_run) : un post à blanc compte dans la journée comme un vrai
+(la cadence se simule fidèlement) et réserve son contenu ce jour-là seulement ; ensuite, comme un post
+« skipped », il ne consomme rien : le contenu reste dans le stock et la ligne peut être replanifiée.
 """
 
 from __future__ import annotations
@@ -34,7 +38,17 @@ from loopcast.diffusion.settings import (
     parse_windows,
 )
 from loopcast.diffusion.slots import free_spans, group_load, nearest, place, rng_for
-from loopcast.diffusion.store import iso, parse_dt, posts_between, tx, update_post
+from loopcast.diffusion.store import ACTIVE_STATUSES, iso, parse_dt, posts_between, tx, update_post
+
+DAY_STATUSES = (*ACTIVE_STATUSES, "dry_run")      # ce qui occupe un créneau de la journée
+RELEASED_STATUSES = ("skipped", "dry_run")       # ce qui ne retient pas le contenu (ligne réutilisable)
+
+
+def _holds(alias: str) -> str:
+    """Condition SQL : ce post retient-il son contenu ? Paramètre : début de la journée planifiée (un essai à
+    blanc ne retient son contenu que ce jour-là ; '9999' = jamais)."""
+    return (f"({alias}.status NOT IN ('skipped', 'dry_run') "
+            f"OR ({alias}.status = 'dry_run' AND {alias}.scheduled_at >= ?))")
 
 
 @dataclass
@@ -109,13 +123,13 @@ def _plan_account(conn, s: DiffusionSettings, account: Account, now: datetime, p
     quota = max(0, min(st.quota, HARD_CAP))
     plan = AccountPlan(account.id, quota)
 
-    existing = posts_between(conn, account.id, start, end)
+    existing = posts_between(conn, account.id, start, end, DAY_STATUSES)
     excess = len(existing) - quota
     if excess > 0:
         for p in [p for p in reversed(existing) if p.status == "scheduled" and p.scheduled_at > now][:excess]:
             update_post(conn, p.id, now, f"annulé : quota du jour ramené à {quota} ({st.note})", status="skipped")
             plan.trimmed += 1
-        existing = posts_between(conn, account.id, start, end)
+        existing = posts_between(conn, account.id, start, end, DAY_STATUSES)
     plan.existing = len(existing)
     remaining = quota - len(existing)
     if remaining <= 0:
@@ -151,7 +165,7 @@ def _plan_account(conn, s: DiffusionSettings, account: Account, now: datetime, p
                            f"de {s.min_gap_minutes} min)")
         for m in sorted(minutes):
             when = at_minute(today, m, tz)
-            planned = _fill(conn, account, when, now, s)
+            planned = _fill(conn, account, when, now, s, day_start=start)
             if planned is None:
                 plan.missing += 1
                 plan.reason = "pas assez de contenu validé pour ce compte"
@@ -167,13 +181,14 @@ def _plan_account(conn, s: DiffusionSettings, account: Account, now: datetime, p
     return plan
 
 
-def _fill(conn, account: Account, when: datetime, now: datetime, s: DiffusionSettings) -> PlannedPost | None:
+def _fill(conn, account: Account, when: datetime, now: datetime, s: DiffusionSettings, *,
+          day_start: datetime | None = None) -> PlannedPost | None:
     recent = [r[0] for r in conn.execute(
         """SELECT c.format FROM posts p LEFT JOIN content c ON c.id = p.content_id
            WHERE p.account_id=? AND p.status != 'skipped' AND p.scheduled_at < ?
            ORDER BY p.scheduled_at DESC, p.id DESC LIMIT 3""", (account.id, iso(when)))]
     used = Counter(recent)
-    for cand in sorted(candidates(conn, account), key=lambda c: (
+    for cand in sorted(candidates(conn, account, day_start=day_start), key=lambda c: (
             c["tier"], used.get(c["format"], 0), 0 if c["variation"] else 1, c["since"], c["id"])):
         why = "variation d'un gagnant, " if cand["variation"] else ""
         post_id = create_post(conn, account, cand["id"], when, now,
@@ -183,12 +198,15 @@ def _fill(conn, account: Account, when: datetime, now: datetime, s: DiffusionSet
     return None
 
 
-def candidates(conn: sqlite3.Connection, account: Account) -> list[dict]:
-    """Les contenus que ce compte peut publier, avec leur rang (0 = destiné à ce téléphone, 1 = à personne)."""
+def candidates(conn: sqlite3.Connection, account: Account, *, day_start: datetime | None = None) -> list[dict]:
+    """Les contenus que ce compte peut publier, avec leur rang (0 = destiné à ce téléphone, 1 = à personne).
+    `day_start` : début de la journée planifiée, où un post à blanc (dry_run) retient encore son contenu ;
+    sans lui (stock), un post à blanc ne retient rien."""
     if not account.app_id:
         return []
+    today = iso(day_start) if day_start is not None else "9999"
     rows = conn.execute(
-        """SELECT c.id, c.format, COALESCE(c.approved_at, c.created_at, '') AS since,
+        f"""SELECT c.id, c.format, COALESCE(c.approved_at, c.created_at, '') AS since,
                   COALESCE(c.account_id, i.account_id) AS target,
                   CASE WHEN json_valid(i.idea) THEN json_extract(i.idea, '$.phone_id') END AS idea_phone,
                   COALESCE(c.parent_id, i.parent_id) AS parent
@@ -196,10 +214,10 @@ def candidates(conn: sqlite3.Connection, account: Account) -> list[dict]:
            WHERE c.status = 'approved' AND COALESCE(c.app_id, c.brand) = ? AND c.lang = ?
              AND c.files IS NOT NULL AND c.files NOT IN ('', '[]')
              AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.content_id = c.id AND p.platform = ?
-                             AND p.status != 'skipped')
-             AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.content_id = c.id AND p.status != 'skipped'
+                             AND {_holds('p')})
+             AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.content_id = c.id AND {_holds('p')}
                              AND substr(p.account_id, 1, instr(p.account_id, ':') - 1) != ?)""",
-        (account.app_id, account.lang, account.platform, account.device),
+        (account.app_id, account.lang, account.platform, today, today, account.device),
     ).fetchall()
     out = []
     for r in rows:
@@ -213,7 +231,7 @@ def candidates(conn: sqlite3.Connection, account: Account) -> list[dict]:
 
 def create_post(conn: sqlite3.Connection, account: Account, content_id: str, when: datetime, now: datetime,
                 message: str) -> int | None:
-    """Crée le post (ou reprend la ligne « skipped » du même contenu sur cette plateforme).
+    """Crée le post (ou reprend la ligne « skipped » ou « dry_run » du même contenu sur cette plateforme).
     None si le contenu est déjà pris sur cette plateforme (index unique posts(content_id, platform)).
 
     La reprise remet attempts à 0 mais change `planned_at` : la clé de la tâche de publication
@@ -222,7 +240,7 @@ def create_post(conn: sqlite3.Connection, account: Account, content_id: str, whe
     row = conn.execute("SELECT id, status FROM posts WHERE content_id=? AND platform=?",
                        (content_id, account.platform)).fetchone()
     if row is not None:
-        if row["status"] != "skipped":
+        if row["status"] not in RELEASED_STATUSES:
             return None
         update_post(conn, row["id"], now, f"replanifié : {message}", account_id=account.id, app_id=account.app_id,
                     status="scheduled", scheduled_at=when, planned_at=when, attempts=0, external_id=None,
@@ -244,14 +262,14 @@ def create_post(conn: sqlite3.Connection, account: Account, content_id: str, whe
 def _pair_candidates(conn, tiktok: Account, start: datetime, end: datetime) -> list[dict]:
     """Les posts TikTok du jour dont le contenu n'est pas encore prévu sur Instagram."""
     rows = conn.execute(
-        """SELECT p.content_id, COALESCE(p.posted_at, p.scheduled_at) AS at FROM posts p
+        f"""SELECT p.content_id, COALESCE(p.posted_at, p.scheduled_at) AS at FROM posts p
            JOIN content c ON c.id = p.content_id
            WHERE p.account_id = ? AND p.scheduled_at >= ? AND p.scheduled_at < ?
-             AND p.status IN ('scheduled', 'running', 'needs_human', 'posted') AND c.status = 'approved'
+             AND p.status IN ('scheduled', 'running', 'needs_human', 'posted', 'dry_run') AND c.status = 'approved'
              AND NOT EXISTS (SELECT 1 FROM posts q WHERE q.content_id = p.content_id AND q.platform = 'instagram'
-                             AND q.status != 'skipped')
+                             AND {_holds('q')})
            ORDER BY p.scheduled_at, p.id""",
-        (tiktok.id, iso(start), iso(end)),
+        (tiktok.id, iso(start), iso(end), iso(start)),
     ).fetchall()
     return [{"content_id": r["content_id"], "at": parse_dt(r["at"])} for r in rows]
 

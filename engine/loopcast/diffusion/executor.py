@@ -31,6 +31,7 @@ from loopcast.diffusion.store import (
 log = logging.getLogger(__name__)
 
 TICK_HORIZON_MINUTES = 10           # on enfile les posts dus d'ici le prochain tour
+DRY_RUN_STATUSES = ("dry_run",)     # essai à blanc : compte dans la journée, ne consomme pas le contenu
 
 
 def publish_key(post_id: int, attempts: int, planned_at: datetime | str | None = None) -> str:
@@ -156,11 +157,12 @@ def _refusal(conn, s: DiffusionSettings, post, now: datetime, notifier) -> str |
     if content.status != "approved":
         return f"contenu retiré de la diffusion (statut {content.status})"
     start, end = day_bounds(local_day(now, s.tz), s.tz)
-    marks = ",".join("?" * len(PENDING_STATUSES))
+    counted = PENDING_STATUSES + DRY_RUN_STATUSES          # un essai à blanc simule aussi la cadence du jour
+    marks = ",".join("?" * len(counted))
     done = conn.execute(
         f"""SELECT COUNT(*) FROM posts WHERE account_id=? AND status IN ({marks})
             AND COALESCE(posted_at, scheduled_at) >= ? AND COALESCE(posted_at, scheduled_at) < ?""",
-        (account.id, *PENDING_STATUSES, iso(start), iso(end))).fetchone()[0]
+        (account.id, *counted, iso(start), iso(end))).fetchone()[0]
     if done >= HARD_CAP:
         return f"plafond de {HARD_CAP} posts par jour atteint"
     if done >= st.quota:
@@ -172,7 +174,11 @@ def _apply(conn, s: DiffusionSettings, post_id: int, account, publisher_name: st
            result: PublishResult, now: datetime, notifier, *, planned_at: datetime | None = None) -> dict:
     out = {"post_id": post_id, "status": result.status, "attempt": attempt, "log": result.log}
     with tx(conn):
-        if result.status == "posted":
+        if result.status == "dry_run":
+            # Essai à blanc : ni posted_at, ni identifiant, ni vues ; le contenu reste disponible.
+            update_post(conn, post_id, now, result.log, status="dry_run")
+            alerts.event(conn, now, "diffusion.dry_run", f"{account.id} : post #{post_id} — {result.log}", account.id)
+        elif result.status == "posted":
             update_post(conn, post_id, now, f"publié ({publisher_name}) : {result.log}", status="posted",
                         posted_at=now, external_id=result.external_id, url=result.url)
             alerts.event(conn, now, "diffusion.posted", f"{account.id} : post #{post_id} publié", account.id)

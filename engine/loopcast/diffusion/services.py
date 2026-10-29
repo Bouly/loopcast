@@ -1,7 +1,8 @@
 """Services fournis par le module (modules.services) : le registre des publishers.
 
-En démo (`serve --demo`) ou avec `diffusion.dry_run: true`, tout passe par FakePublisher : la boucle
-planification → publication → vues → gagnants tourne sans aucun compte ni appel réel.
+En démo (`serve --demo`, base data/demo.db), tout passe par FakePublisher : la boucle planification →
+publication → vues → gagnants tourne sans aucun compte ni appel réel. Avec `diffusion.dry_run: true` (vraie
+base), essai à blanc : DryRunPublisher journalise ce qui partirait, sans rien publier ni inventer de vues.
 """
 
 from __future__ import annotations
