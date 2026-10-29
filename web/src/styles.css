@@ -78,7 +78,7 @@ body {
   font-feature-settings: "tnum" 0;
   -webkit-font-smoothing: antialiased;
 }
-button, input { font: inherit; color: inherit; }
+button, input, textarea, select { font: inherit; color: inherit; }
 .mono { font-family: var(--mono); font-size: 12px; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted-foreground); }
@@ -170,6 +170,7 @@ button, input { font: inherit; color: inherit; }
 .dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
 .dot.bad { background: var(--destructive); box-shadow: 0 0 0 3px var(--destructive-bg); }
 .dot.idle { background: var(--idle); }
+.dot.info { background: var(--info); box-shadow: 0 0 0 3px var(--info-bg); }
 
 .badge {
   display: inline-flex;
@@ -468,8 +469,20 @@ button, input { font: inherit; color: inherit; }
   .device { margin: 0 auto; width: min(300px, 100%); }
 }
 @media (max-width: 640px) {
-  .topbar-inner { padding: 0 16px; gap: 12px; }
-  .nav { display: none; }
+  /* Sur téléphone, la navigation passe sur une seconde ligne qui défile : toutes les sections restent atteignables. */
+  .topbar-inner { padding: 0 16px; gap: 0 12px; flex-wrap: wrap; height: auto; padding-top: 10px; }
+  .topbar .right { margin-left: auto; }
+  .nav {
+    order: 3;
+    width: calc(100% + 32px);
+    margin: 6px -16px 0;
+    padding: 0 12px;
+    height: 40px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { white-space: nowrap; }
   .page { padding: 20px 16px 48px; }
   .log-row { grid-template-columns: 18px 1fr; }
   .log-row time { grid-column: 2; padding: 0; }
