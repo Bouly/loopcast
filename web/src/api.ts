@@ -22,7 +22,8 @@ export type LogEvent = { id?: number; at?: string; phone_udid?: string | null; k
 
 export type Size = { width: number; height: number };
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** Appel JSON à l'API : lève une Error avec le message du serveur (`detail`) si la réponse n'est pas OK. */
+export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
