@@ -10,12 +10,18 @@
 - Site web : la page, texte principal extrait avec BeautifulSoup, borné.
 
 Fonctions pures autour d'un client httpx : les tests passent un httpx.MockTransport (aucun réseau).
+
+Le client de new_client() refuse, avant chaque requête (redirections comprises), un hôte qui mène au Mac
+lui-même ou au réseau local (bouclage, adresse privée ou de lien local, Tailscale 100.64.0.0/10…) : le lien
+d'une source ne doit jamais faire lire à Loopcast son propre dashboard ni une machine du réseau.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
+import socket
 from dataclasses import dataclass, field
 from datetime import datetime
 from urllib.parse import parse_qs, urljoin, urlsplit
@@ -49,9 +55,44 @@ class Fetched:
     meta: dict = field(default_factory=dict)
 
 
-def new_client(timeout_s: float) -> httpx.Client:
+def new_client(timeout_s: float, *, transport: httpx.BaseTransport | None = None) -> httpx.Client:
+    """Le client des sources : chaque requête, redirections comprises, passe d'abord par check_public_url."""
     return httpx.Client(timeout=httpx.Timeout(timeout_s, connect=min(10.0, timeout_s)),
-                        headers={"User-Agent": USER_AGENT}, follow_redirects=True)
+                        headers={"User-Agent": USER_AGENT}, follow_redirects=True, transport=transport,
+                        event_hooks={"request": [lambda request: check_public_url(request.url)]})
+
+
+def _resolve(host: str, port: int) -> list[str]:
+    """Les adresses IP de `host` (résolution du système)."""
+    return [info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)]
+
+
+def _is_public(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%", 1)[0])           # sans l'identifiant de zone IPv6
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not ip.is_multicast
+
+
+def check_public_url(url: httpx.URL | str) -> None:
+    """FetchError (définitive) si l'hôte mène à une adresse de bouclage, privée, de lien local, partagée
+    (Tailscale 100.64.0.0/10) ou réservée ; FetchError passagère si le nom ne se résout pas."""
+    url = httpx.URL(str(url))
+    host = url.raw_host.decode("ascii", "replace").strip("[]")
+    if not host:
+        raise FetchError("lien invalide : pas d'hôte", permanent=True)
+    try:
+        addresses = [str(ipaddress.ip_address(host))]
+    except ValueError:
+        try:
+            addresses = _resolve(host, url.port or (443 if url.scheme == "https" else 80))
+        except (OSError, UnicodeError) as e:
+            raise FetchError(f"{url.host} : adresse introuvable ({e})") from e
+    blocked = [a for a in addresses if not _is_public(a)]
+    if blocked or not addresses:
+        raise FetchError(f"lien refusé : {url.host} mène à une adresse locale ou privée "
+                         f"({', '.join(blocked) or 'aucune adresse'}) ; seuls les sites publics sont lus",
+                         permanent=True)
 
 
 def source_kind(url: str) -> str:

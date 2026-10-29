@@ -186,3 +186,35 @@ def test_appstore_id(value, expected):
 def test_full_size_screenshot_url():
     url = "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/73/af/06/x_fr_iphone6.5_screen_1.png/320x480bb.jpg"
     assert sources.full_size(url) == url.removesuffix("320x480bb.jpg") + "3000x3000bb.png"
+
+
+def test_local_addresses_are_refused_even_after_a_redirect(monkeypatch):
+    """Le lien d'une source (ou sa redirection) qui mène au Mac lui-même ou au réseau local est refusé avant la
+    requête : un site ne doit pas faire lire à Loopcast son propre dashboard (127.0.0.1:8787) ni le réseau.
+    Avant : les redirections étaient suivies jusqu'à 127.0.0.1."""
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if request.url.host == "public.example":
+            return httpx.Response(302, headers={"Location": "http://127.0.0.1:8787/api/jobs"})
+        return httpx.Response(200, text="<html><title>ok</title><p>Bonjour</p></html>",
+                              headers={"content-type": "text/html"})
+
+    addresses = {"public.example": ["93.184.216.34"], "fine.example": ["93.184.216.34"],
+                 "lan.example": ["192.168.1.20"], "tailnet.example": ["100.101.102.103"],
+                 "mixed.example": ["93.184.216.34", "127.0.0.1"], "localhost": ["127.0.0.1", "::1"]}
+    monkeypatch.setattr(sources, "_resolve", lambda host, port: addresses[host])
+    read = dict(lang="fr", max_bytes=100_000, max_chars=2000)
+    with sources.new_client(5, transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(sources.FetchError, match="adresse locale ou privée") as refused:
+            sources.fetch_website(client, "http://public.example/", **read)
+        assert refused.value.permanent and seen == ["http://public.example/"]      # 127.0.0.1 jamais contacté
+        for url in ("http://127.0.0.1:8787/", "http://[::1]:8787/", "http://169.254.169.254/latest/",
+                    "http://lan.example/", "http://tailnet.example/", "http://mixed.example/"):
+            with pytest.raises(sources.FetchError, match="adresse locale ou privée"):
+                sources.fetch_website(client, url, **read)
+        with pytest.raises(sources.FetchError, match="locale ou privée"):
+            sources.download(client, "http://localhost:8787/api/apps", max_bytes=1000)  # images aussi
+        assert seen == ["http://public.example/"]
+        assert sources.fetch_website(client, "http://fine.example/", **read).title == "ok"
