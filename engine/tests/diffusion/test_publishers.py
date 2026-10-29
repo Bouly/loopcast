@@ -62,6 +62,24 @@ def test_manual_publisher_says_what_to_do(tmp_path):
     assert "pas encore branché" in res.log and "contenu généré par IA" in res.log
 
 
+def test_manual_instructions_recall_the_mandatory_declarations(tmp_path):
+    """Seul canal actif aujourd'hui : il rappelle « Contenu commercial › Votre marque » sur TikTok (notre propre
+    app), et l'étiquette IA sur TikTok comme sur Instagram pour un contenu ai_label."""
+    pub = ManualPublisher()
+    tiktok = pub.publish(account(), item(), []).log
+    assert "Avant de publier : activer « Contenu commercial › Votre marque »." in tiktok
+    assert "contenu généré par IA" not in tiktok
+    tiktok_ai = pub.publish(account(), item(ai_label=True), []).log
+    assert ("Avant de publier : activer « Contenu commercial › Votre marque » ; activer l'étiquette « contenu "
+            "généré par IA ».") in tiktok_ai
+    instagram = pub.publish(account(platform="instagram"), item(), []).log
+    assert "Votre marque" not in instagram and "Avant de publier" not in instagram
+    instagram_ai = pub.publish(account(platform="instagram"), item(ai_label=True), []).log
+    assert "Avant de publier : activer l'étiquette « contenu généré par IA »." in instagram_ai
+    fallback = Publishers(make_config(tmp_path)).for_account(account("api_direct"))      # API pas branchée
+    assert "Votre marque" in fallback.publish(account("api_direct"), item(), []).log
+
+
 def test_caption_and_hashtags():
     assert item().post_text() == "Ma légende\n\n#habitudes #focus"
     assert item(caption="", hashtags=["a"]).post_text() == "#a"

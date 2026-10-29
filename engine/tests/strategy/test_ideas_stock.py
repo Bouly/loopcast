@@ -144,3 +144,30 @@ def test_settings_defaults_and_legacy_key():
     assert (custom["stock_target"], custom["ideas_per_batch"], custom["idea_review"]) == (4, store.MAX_BATCH, "manual")
     assert store.new_idea_status({"pipeline": {"idea_review": "manual"}}) == "proposed"
     assert store.new_idea_status({}) == "approved"
+
+
+def test_reapproved_idea_after_rejected_video_is_really_produced_again(sconn, seeded, clock):
+    """Vidéo rejetée dans la file de validation, puis idée approuvée à nouveau : la production repart pour de
+    bon. Avant : la tâche content.produce:<idée>, déjà terminée, était renvoyée telle quelle ; rien ne
+    repartait, l'idée restait « approved » pour toujours et comptait dans le stock."""
+    from loopcast.production import review
+
+    approve_strategy(sconn, clock())
+    _idea(sconn, clock(), "i1", "produced")
+    first = store.enqueue_production(sconn, "i1", APP, clock())
+    sconn.execute("UPDATE jobs SET status='done' WHERE id=?", (first,))              # la production a eu lieu
+    sconn.execute("""INSERT INTO content(id, app_id, idea_id, account_id, format, lang, status, qa, run)
+                     VALUES ('i1', ?, 'i1', 'phone-1:tiktok', 'hook-demo', 'fr', 'rendered', '{"ok": true}', 0)""",
+                  (APP,))
+    review.reject(sconn, "i1", clock(), "accroche trop faible")
+    assert store.get_idea(sconn, "i1")["status"] == "rejected"
+
+    out = store.approve_idea(sconn, "i1", clock())
+    assert out["status"] == "producing" and out["job_id"] != first
+    job = job_row(sconn, out["job_id"])
+    assert (job["key"], job["status"], json.loads(job["payload"])["run"]) == ("content.produce:i1:r1", "queued", 1)
+    assert store.get_idea(sconn, "i1")["status"] == "producing"
+    content = sconn.execute("SELECT status, run FROM content WHERE id='i1'").fetchone()
+    assert (content["status"], content["run"]) == ("draft", 1)
+    with pytest.raises(store.Conflict, match="producing"):                            # pas deux relances
+        store.approve_idea(sconn, "i1", clock())

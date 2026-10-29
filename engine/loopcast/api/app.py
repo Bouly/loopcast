@@ -2,6 +2,10 @@
 
 Pour l'instant : la ferme d'iPhones (état, journal, captures, prise en main à distance).
 Accès à distance uniquement par Tailscale : le serveur écoute sur 127.0.0.1 par défaut.
+
+Pas de compte ni de mot de passe : une requête qui modifie quelque chose (POST, PUT, PATCH, DELETE) venue
+d'une autre origine que le dashboard est refusée (OriginGuard), pour qu'une page web ouverte sur le Mac ne
+puisse pas agir à notre place.
 """
 
 from __future__ import annotations
@@ -11,10 +15,12 @@ import sqlite3
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, Iterable
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -49,6 +55,69 @@ class Button(BaseModel):
 
 class App(BaseModel):
     app: str            # clé de BUNDLES (tiktok, instagram…) ou bundle id complet
+
+
+# --- Contrôle d'origine (CSRF) -------------------------------------------------------------------------------
+
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+DEV_ORIGINS = ("http://127.0.0.1:5173", "http://localhost:5173")    # front de dev (web/vite.config.ts)
+
+
+def _origin(url: str) -> tuple[str, str, int] | None:
+    """(schéma, hôte, port) d'une origine, port par défaut explicité ; None si illisible (« null »…)."""
+    try:
+        parts = urlsplit(url.strip())
+        port = parts.port
+    except ValueError:
+        return None
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    return parts.scheme, parts.hostname.lower(), port or (443 if parts.scheme == "https" else 80)
+
+
+def allowed_origins(config: Any) -> list[str]:
+    """Réglage `api.allowed_origins` : origines acceptées en plus de celle du serveur (Tailscale en HTTPS…)."""
+    raw = ((getattr(config, "settings", None) or {}).get("api") or {}).get("allowed_origins") or []
+    return [raw] if isinstance(raw, str) else [str(o) for o in raw]
+
+
+class OriginGuard:
+    """Refuse (403) toute requête qui modifie (POST, PUT, PATCH, DELETE) et dont l'en-tête Origin n'est pas
+    celle du dashboard : une page web ouverte sur le Mac ne peut ni valider un contenu, ni relancer une tâche,
+    ni reprendre un compte à notre place. Acceptées : la même origine que la requête (en-tête Host),
+    localhost / 127.0.0.1 sur le port du serveur, le front de dev (port 5173) et `api.allowed_origins`.
+    Sans en-tête Origin (CLI, curl, scripts), la requête passe."""
+
+    def __init__(self, app: Any, allowed: Iterable[str] = ()):
+        self.app = app
+        self.allowed = {o for o in (_origin(a) for a in (*DEV_ORIGINS, *allowed)) if o is not None}
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope["method"] in UNSAFE_METHODS:
+            origins = [v.decode("latin-1") for k, v in scope["headers"] if k == b"origin"]
+            refused = next((o for o in origins if not self._accepts(o, scope)), None)
+            if refused is not None:
+                response = JSONResponse({"detail": f"requête refusée : origine « {refused[:200]} » non autorisée "
+                                                   "(page d'un autre site ?). Si elle est légitime, l'ajouter à "
+                                                   "api.allowed_origins."}, status_code=403)
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+    def _accepts(self, origin: str, scope: dict) -> bool:
+        o = _origin(origin)
+        if o is None:
+            return False
+        if o in self.allowed:
+            return True
+        host = next((v.decode("latin-1") for k, v in scope["headers"] if k == b"host"), "")
+        own = _origin(f"{scope.get('scheme', 'http')}://{host}") if host else None
+        if own is not None and o == own:
+            return True                                        # même origine que la page qui a fait la requête
+        server = scope.get("server") or (None, None)
+        port = server[1] or (own[2] if own else None)
+        return o[1] in LOOPBACK_HOSTS and o[2] == port
 
 
 def create_app(
@@ -104,6 +173,7 @@ def create_app(
         stop.set()
 
     app = FastAPI(title="Loopcast", lifespan=lifespan)
+    app.add_middleware(OriginGuard, allowed=allowed_origins(config))
     # État partagé avec les routes des modules (loopcast/api/deps.py).
     app.state.config = config
     app.state.conn = conn

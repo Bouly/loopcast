@@ -1,7 +1,8 @@
 """python -m loopcast diffusion plan | calendar | accounts | publish | metrics set|fetch | tick | pause | resume
 | posted | failed
 
-`--dry-run` : tout passe par FakePublisher (rien ne part, aucun appel réel).
+`--dry-run` : essai à blanc (rien ne part, rien n'est inventé : le post passe « dry_run » avec, dans son
+journal, ce qui serait parti ; le contenu reste disponible).
 """
 
 from __future__ import annotations
@@ -206,7 +207,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     sub = d.add_subparsers(dest="diffusion_cmd", required=True)
 
     p = sub.add_parser("plan", help="régulateur puis planification du jour (affiche le plan)")
-    p.add_argument("--dry-run", action="store_true", help="FakePublisher pour tous les comptes")
+    p.add_argument("--dry-run", action="store_true", help="essai à blanc pour tous les comptes")
     p.set_defaults(fn=cmd_plan)
 
     p = sub.add_parser("calendar", help="posts prévus et faits, par jour")
@@ -218,7 +219,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     p.set_defaults(fn=cmd_accounts)
 
     p = sub.add_parser("publish", help="publie tout de suite les posts dus")
-    p.add_argument("--dry-run", action="store_true", help="FakePublisher : rien ne part vraiment")
+    p.add_argument("--dry-run", action="store_true", help="essai à blanc : rien ne part, rien n'est inventé")
     p.set_defaults(fn=cmd_publish)
 
     m = sub.add_parser("metrics", help="vues des posts").add_subparsers(dest="metrics_cmd", required=True)
@@ -232,7 +233,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     p.set_defaults(fn=cmd_metrics_fetch)
 
     p = sub.add_parser("tick", help="un tour de l'autopilote, puis les publications dues")
-    p.add_argument("--dry-run", action="store_true", help="FakePublisher : rien ne part vraiment")
+    p.add_argument("--dry-run", action="store_true", help="essai à blanc : rien ne part, rien n'est inventé")
     p.set_defaults(fn=cmd_tick)
 
     p = sub.add_parser("pause", help="mettre un compte en pause")

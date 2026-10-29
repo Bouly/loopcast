@@ -112,8 +112,8 @@ def in_flight(conn: sqlite3.Connection, content_id: str, idea_id: str | None = N
 
 
 def out_dir(config: Any) -> Path:
-    """Les rendus : out/<content_id>/ (ignoré par git)."""
-    return Path(config.root) / "out"
+    """Les rendus : out/<content_id>/ (ignoré par git) ; en démo, data/demo/out/ (config.out_dir)."""
+    return Path(getattr(config, "out_dir", None) or Path(config.root) / "out")
 
 
 def content_dir(config: Any, content_id: str) -> Path:

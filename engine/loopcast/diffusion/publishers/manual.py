@@ -1,7 +1,8 @@
 """ManualPublisher : le post passe « à finir » ; une personne publie depuis le téléphone puis clique « Publié ».
 
 C'est aussi le repli quand le canal du compte n'est pas encore branché (APIs sans jeton, iPhone désactivé) :
-la chaîne continue, et le dashboard dit pourquoi c'est manuel.
+la chaîne continue, et le dashboard dit pourquoi c'est manuel. Les consignes rappellent les déclarations
+obligatoires (TikTok : « Contenu commercial › Votre marque » ; label IA si le contenu en demande un).
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from loopcast.accounts import Account
-from loopcast.diffusion.publishers.base import ContentItem, Metrics, PublishResult
+from loopcast.diffusion.publishers.base import ContentItem, Metrics, PublishResult, disclosure_steps
 
 PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram"}
 
@@ -30,8 +31,9 @@ class ManualPublisher:
             lines.append(self.reason)
         if media:
             lines.append("Fichiers : " + ", ".join(p.name for p in media))
-        if content.ai_label:
-            lines.append("Activer l'étiquette « contenu généré par IA » avant de publier.")
+        todo = disclosure_steps(account.platform, content.ai_label)
+        if todo:
+            lines.append("Avant de publier : " + " ; ".join(todo) + ".")
         lines.append("Légende :\n" + content.post_text())
         return PublishResult.needs_human("\n".join(lines))
 

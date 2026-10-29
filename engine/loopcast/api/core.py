@@ -68,11 +68,16 @@ def cost_summary(request: Request):
 
 @router.get("/status")
 def status(request: Request):
-    """Ce qui est branché : Claude (réel, démo ou absent), fournisseurs, exécutants."""
+    """Ce qui est branché : Claude (réel, démo ou absent), fournisseurs (réel, démo ou indisponible, et
+    pourquoi), exécutants, et si l'on tourne sur la base de démo."""
     services = deps.services(request)
     llm = services.get("llm")
     return {
         "llm": getattr(llm, "name", "absent"),
         "services": sorted(k for k in services if k != "llm"),
+        "generators": {k: {"mode": getattr(s, "mode", None), "real": bool(getattr(s, "real", False)),
+                           "why": s.why, "disabled_formats": list(getattr(s, "disabled_formats", []))}
+                       for k, s in sorted(services.items()) if k != "llm" and isinstance(getattr(s, "why", None), str)},
+        "demo": bool(getattr(deps.config(request), "demo", False)),
         "jobs": jobs.stats(deps.conn(request)),
     }

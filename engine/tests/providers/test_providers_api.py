@@ -5,11 +5,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from loopcast import cli as loopcast_cli
-from loopcast import db, jobs
+from loopcast import db, formats, jobs
 from loopcast.api.app import create_app
 from loopcast.providers import catalog, fal
 from loopcast.providers import cli as providers_cli
 from loopcast.providers import tasks
+from loopcast.providers.base import NoModel, ProviderAuthError, VideoRequest
 from loopcast.providers.router import Router
 from loopcast.providers.services import build
 
@@ -34,29 +35,68 @@ def refusing_fal_router() -> tuple[Router, list]:
                   why="fal.ai (tests)"), calls
 
 
-def test_build_without_key_says_it_is_fake(config, no_key):
+PAID_FORMATS = {"ai-hook-demo", "ugc-ai"}
+
+
+def test_build_without_key_refuses_clearly(config, no_key, conn, clock):
+    """Hors démo, sans clé fal.ai : plus de bascule silencieuse sur le faux fournisseur (ses clips de test
+    finissaient en validation). Le générateur refuse en clair, la tâche video.generate s'arrête en échec
+    définitif avec la raison, et les formats premium sortent du catalogue proposé à la stratégie."""
     services = build(config)
     assert set(services) == {"video", "image"}
     video = services["video"]
-    assert video.mode == "fake" and not video.real and "aucune clé fal.ai" in video.why
-    assert {p.name for p in video.providers.values()} == {"fake"}
-    assert build(config, demo=True)["image"].why.startswith("mode démo")
+    assert video.mode == "unavailable" and not video.real and video.providers == {}
+    assert video.why.startswith("génération vidéo indisponible : aucune clé fal.ai")
+    req = VideoRequest(prompt="A phone on a desk", duration_s=4)
+    with pytest.raises(NoModel, match="indisponible"):
+        video.route(req)
+    with pytest.raises(ProviderAuthError):
+        video.poll("h3-max-768p|fake-x")                    # une génération d'avant le redémarrage aussi
+    assert PAID_FORMATS.isdisjoint(s.id for s in formats.catalog())
+    assert "ugc-ai" not in formats.catalog_for_prompt() and video.disabled_formats == sorted(PAID_FORMATS)
+    jid = jobs.enqueue(conn, "video.generate", {"content_id": "c1", "shot_index": 0, "request": req.model_dump()},
+                       clock=clock)
+    jobs.run_one(conn, config, "w", clock=clock, services=services)
+    row = conn.execute("SELECT status, attempts, last_error FROM jobs WHERE id=?", (jid,)).fetchone()
+    assert (row["status"], row["attempts"]) == ("dead", 1)
+    assert "génération vidéo indisponible : aucune clé fal.ai" in row["last_error"]
+    # En démo : le faux fournisseur, et les formats premium reviennent.
+    demo = build(config, demo=True)
+    assert demo["image"].why.startswith("mode démo") and demo["video"].mode == "fake"
+    assert PAID_FORMATS <= {s.id for s in formats.catalog()}
 
 
-def test_build_with_key_uses_fal_and_survives_a_broken_catalog(config, monkeypatch):
+def test_build_with_key_uses_fal_and_refuses_a_broken_catalog(config, monkeypatch):
     monkeypatch.setenv("FAL_KEY", "k-test")
     video = build(config)["video"]
     assert video.mode == "fal" and "FAL_KEY" in video.why and video.providers["h3-max-768p"].name == "fal"
+    assert PAID_FORMATS <= {s.id for s in formats.catalog()}
     config.settings["providers"] = {"video": {"models": [{"id": "h3-max-768p", "usd_per_sec": 0.1}]}}
     broken = build(config)["video"]
-    assert broken.mode == "fake" and "catalogue invalide" in broken.why and "usd_per_sec" in broken.why
+    assert broken.mode == "unavailable" and "catalogue invalide" in broken.why and "usd_per_sec" in broken.why
+
+
+def test_api_says_generation_is_unavailable(config, backend, tmp_path, no_key):
+    path = tmp_path / "nokey.db"
+    app = create_app(config, db.connect(path), backend, services=build(config), db_path=path)
+    with TestClient(app) as client:
+        video = client.get("/api/providers").json()["video"]
+        assert video["mode"] == "unavailable" and video["available"] is False and "aucune clé fal.ai" in video["why"]
+        assert set(video["disabled_formats"]) == PAID_FORMATS
+        status = client.get("/api/status").json()["generators"]["video"]
+        assert status["mode"] == "unavailable" and not status["real"] and "aucune clé fal.ai" in status["why"]
+        req = {"kind": "video", "request": {"prompt": "x", "duration_s": 4}}
+        q = client.post("/api/providers/estimate", json=req).json()
+        assert q["ok"] is False and "indisponible" in q["error"]
+        refused = client.post("/api/providers/test", json=req)
+        assert refused.status_code == 422 and "aucune clé fal.ai" in refused.json()["detail"]
 
 
 @pytest.fixture
 def api(config, backend, tmp_path, no_key):
     path = tmp_path / "api.db"
     conn = db.connect(path)
-    app = create_app(config, conn, backend, services=build(config), db_path=path)
+    app = create_app(config, conn, backend, services=build(config, demo=True), db_path=path)
     with TestClient(app) as client:
         client.conn = conn
         yield client
@@ -64,7 +104,7 @@ def api(config, backend, tmp_path, no_key):
 
 def test_overview_and_estimate(api):
     body = api.get("/api/providers").json()
-    assert body["video"]["mode"] == "fake" and "aucune clé" in body["video"]["why"]
+    assert body["video"]["mode"] == "fake" and "mode démo" in body["video"]["why"]
     h3 = next(m for m in body["video"]["models"] if m["id"] == "h3-max-768p")
     assert h3["prices"]["5s"] == 0.4 and h3["served_by"] == "fake" and h3["source"].startswith("https://fal.ai")
     assert {m["id"] for m in body["image"]["models"]} >= {"nano-banana", "flux2-pro"}

@@ -449,20 +449,45 @@ def enqueue_production(conn: sqlite3.Connection, idea_id: str, app_id: str, now:
                         app_id=app_id, parent_id=parent_job, clock=lambda: now)
 
 
+RELAUNCHABLE_CONTENT = ("rejected", "failed", "qa_failed")    # contenu d'une idée qu'on peut refaire
+
+
 def approve_idea(conn: sqlite3.Connection, idea_id: str, now: datetime) -> dict:
+    """Approuve l'idée et lance sa production.
+
+    Une idée déjà produite dont la vidéo a été rejetée (ou a échoué) repart pour de bon : nouvelle production
+    du même contenu (production.review.relaunch, clé content.produce:<id>:r<n>). Avant, on retombait sur la
+    tâche content.produce:<idée> déjà terminée : rien ne repartait, l'idée restait « approved » pour toujours
+    et gonflait le stock."""
     with transaction(conn):
         idea = get_idea(conn, idea_id)
         if idea is None:
             raise NotFound(f"idée « {idea_id} » introuvable")
         if idea["status"] not in ("proposed", "rejected", "approved"):
             raise Conflict(f"idée déjà en production (statut « {idea['status']} »)")
-        if idea["status"] != "approved":
-            conn.execute("UPDATE ideas SET status='approved', review_note=NULL, updated_at=? WHERE id=?",
-                         (iso(now), idea_id))
-        job_id = enqueue_production(conn, idea_id, idea["app_id"], now)
-        # Rejetée puis approuvée à nouveau : la tâche annulée (même clé) repart.
-        jobs.retry(conn, job_id, clock=lambda: now)
-    return {"id": idea_id, "status": "approved", "job_id": job_id}
+        content = conn.execute("SELECT id, status FROM content WHERE id=? OR idea_id=? ORDER BY id=? DESC LIMIT 1",
+                               (idea_id, idea_id, idea_id)).fetchone()
+        if content is None:
+            if idea["status"] != "approved":
+                conn.execute("UPDATE ideas SET status='approved', review_note=NULL, updated_at=? WHERE id=?",
+                             (iso(now), idea_id))
+            job_id = enqueue_production(conn, idea_id, idea["app_id"], now)
+            # Rejetée (avant la production) puis approuvée à nouveau : la tâche annulée (même clé) repart.
+            jobs.retry(conn, job_id, clock=lambda: now)
+            return {"id": idea_id, "status": "approved", "job_id": job_id}
+        if content["status"] not in RELAUNCHABLE_CONTENT:
+            raise Conflict(f"idée déjà produite : contenu {content['id']} au statut « {content['status']} » "
+                           "(le valider ou le rejeter dans la file de validation)")
+    # Hors de la transaction : la relance de la production ouvre la sienne.
+    try:
+        from loopcast.production import review
+    except ImportError as e:                       # module production absent : on le dit plutôt que de bloquer
+        raise Conflict("idée déjà produite puis rejetée : relance impossible sans le module production") from e
+    try:
+        job_id = review.relaunch(conn, content["id"], now)
+    except review.ReviewError as e:
+        raise Conflict(f"idée déjà produite, relance impossible : {e}") from e
+    return {"id": idea_id, "status": "producing", "job_id": job_id, "content_id": content["id"]}
 
 
 def reject_idea(conn: sqlite3.Connection, idea_id: str, note: str, now: datetime) -> dict:

@@ -79,6 +79,26 @@ def test_pause_resume_and_brand_files(api, with_brand):
     assert sources[0]["kind"] == "website" and sources[0]["preview"] == "" and "content" not in sources[0]
 
 
+def test_uploaded_documents_are_downloaded_never_rendered(api):
+    """Un .html ou un .svg téléversé n'est jamais affiché sur l'origine du dashboard (son script y agirait à la
+    place de l'équipe) : téléchargement (attachment), et nosniff partout. Images et vidéos restent affichées."""
+    api.post("/api/apps", json={"id": "app", "name": "App"})
+    files = [("files", ("page.html", b"<script>fetch('/api/jobs/1/retry', {method: 'POST'})</script>")),
+             ("files", ("logo.svg", b'<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>')),
+             ("files", ("notes.txt", b"<html><script>alert(1)</script></html>")),
+             ("files", ("a.png", png(300, 650)))]
+    r = api.post("/api/apps/app/assets", files=files)
+    assert r.status_code == 201 and r.json()["errors"] == []
+    stored = {a["filename"]: a for a in r.json()["assets"]}
+    for name in ("page.html", "logo.svg", "notes.txt"):
+        got = api.get(stored[name]["url"])
+        assert got.status_code == 200 and got.headers["content-disposition"].startswith("attachment"), name
+        assert got.headers["x-content-type-options"] == "nosniff"
+    image = api.get(stored["a.png"]["url"])
+    assert image.headers["content-disposition"].startswith("inline") and image.headers["content-type"] == "image/png"
+    assert image.headers["x-content-type-options"] == "nosniff"
+
+
 def test_router_is_mounted_in_the_main_api(cfg, dbpath, aconn, services):
     app = create_app(cfg, aconn, FakeBackend([]), web_dist=None, services=services, db_path=dbpath)
     with TestClient(app) as client:

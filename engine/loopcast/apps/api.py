@@ -21,6 +21,8 @@ from loopcast.schemas import ProductBrief
 router = APIRouter(prefix="/api/apps", tags=["apps"])
 
 _IMMUTABLE = {"Cache-Control": "private, max-age=31536000, immutable"}   # fichiers nommés par empreinte
+# Fichiers téléversés : jamais de devinette du type par le navigateur (un texte ne devient pas du HTML).
+_FILE_HEADERS = {**_IMMUTABLE, "X-Content-Type-Options": "nosniff"}
 
 
 def _errors(fn: Callable) -> Callable:
@@ -232,13 +234,17 @@ def describe_asset(app_id: str, asset_id: int, request: Request):
 @router.get("/{app_id}/assets/{asset_id}/file")
 @_errors
 def asset_file(app_id: str, asset_id: int, request: Request):
-    """Le fichier, avec les requêtes Range (Safari ne lit pas une vidéo sans), servi depuis data/apps/ seulement."""
+    """Le fichier, avec les requêtes Range (Safari ne lit pas une vidéo sans), servi depuis data/apps/ seulement.
+    Affiché dans le navigateur s'il s'agit d'une image matricielle ou d'une vidéo ; sinon (HTML, SVG, PDF,
+    texte…) en téléchargement, pour qu'un fichier téléversé ne s'exécute jamais sur l'origine du dashboard."""
     asset = assets.get_asset(deps.conn(request), app_id, asset_id)
     path = assets.safe_path(deps.config(request), app_id, asset["path"])
     if not path.is_file():
         raise HTTPException(404, "fichier introuvable sur le disque")
-    return FileResponse(path, media_type=asset["mime"] or "application/octet-stream", headers=_IMMUTABLE,
-                        filename=asset["filename"] or path.name, content_disposition_type="inline")
+    inline = assets.served_inline(asset["mime"])
+    return FileResponse(path, media_type=asset["mime"] or "application/octet-stream", headers=_FILE_HEADERS,
+                        filename=asset["filename"] or path.name,
+                        content_disposition_type="inline" if inline else "attachment")
 
 
 @router.get("/{app_id}/assets/{asset_id}/thumb")
@@ -250,7 +256,7 @@ def asset_thumb(app_id: str, asset_id: int, request: Request):
     path = assets.safe_path(deps.config(request), app_id, asset["thumb"])
     if not path.is_file():
         raise HTTPException(404, "miniature introuvable sur le disque")
-    return FileResponse(path, media_type="image/jpeg", headers=_IMMUTABLE)
+    return FileResponse(path, media_type="image/jpeg", headers=_FILE_HEADERS)
 
 
 # --- Sources -----------------------------------------------------------------------------------------------

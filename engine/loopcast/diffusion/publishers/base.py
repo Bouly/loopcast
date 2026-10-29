@@ -1,7 +1,9 @@
 """Le contrat d'un publisher (REPRISE §5.6) et ce qu'il reçoit.
 
-    publisher.publish(account, content, media) -> PublishResult      # posted | needs_human | failed
+    publisher.publish(account, content, media) -> PublishResult      # posted | needs_human | failed | dry_run
     publisher.fetch_metrics(account, external_ids) -> {external_id: Metrics}
+
+`dry_run` : essai à blanc (diffusion.dry_run) ; rien n'est parti, le post est seulement journalisé.
 
 `media` = les fichiers locaux du contenu (out/<content_id>/…). Un publisher par API qui a besoin d'URL
 publiques (Instagram, TikTok en PULL_FROM_URL) les met lui-même sur le stockage objet.
@@ -16,7 +18,7 @@ from typing import Literal, Protocol
 
 from loopcast.accounts import Account
 
-Status = Literal["posted", "needs_human", "failed"]
+Status = Literal["posted", "needs_human", "failed", "dry_run"]
 
 CAPTION_MAX = 2200          # TikTok (runes UTF-16) comme Instagram (caractères)
 HASHTAGS_MAX = 30           # au-delà, Instagram refuse la légende
@@ -67,6 +69,20 @@ class ContentItem:
         return text[:CAPTION_MAX]
 
 
+def disclosure_steps(platform: str, ai_label: bool) -> list[str]:
+    """Les déclarations à activer avant de publier (REPRISE §3, docs/architecture-pipeline.md, garde-fous) :
+    - TikTok : « Contenu commercial › Votre marque » sur chaque post (nous promouvons notre propre app ;
+      `brand_organic_toggle` par l'API) ;
+    - contenu `ai_label` (visages, voix ou scènes réalistes générés) : l'étiquette « contenu généré par IA »,
+      sur TikTok (`is_aigc` par l'API) comme sur Instagram."""
+    steps = []
+    if platform == "tiktok":
+        steps.append("activer « Contenu commercial › Votre marque »")
+    if ai_label:
+        steps.append("activer l'étiquette « contenu généré par IA »")
+    return steps
+
+
 def _json_list(raw) -> list:
     if not raw:
         return []
@@ -98,6 +114,11 @@ class PublishResult:
     @classmethod
     def failed(cls, log: str, retryable: bool = True) -> "PublishResult":
         return cls("failed", log, retryable=retryable)
+
+    @classmethod
+    def dry_run(cls, log: str) -> "PublishResult":
+        """Essai à blanc : ce qui aurait été publié, sans identifiant ni vues (rien n'est parti)."""
+        return cls("dry_run", log, retryable=False)
 
 
 @dataclass
