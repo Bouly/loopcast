@@ -10,10 +10,11 @@ cd ~/Loopcast-Projects/loopcast
 engine/.venv/bin/python -m loopcast serve --demo
 ```
 
-Puis http://127.0.0.1:8787 : Apps › Ajouter une app (Habitudo est proposée), envoyer quelques captures, lancer
+Puis http://127.0.0.1:8788 : Apps › Ajouter une app (Habitudo est proposée), envoyer quelques captures, lancer
 l'analyse, répondre aux questions, approuver la fiche puis la stratégie ; les vidéos arrivent dans Validation au fil
 des rendus (10 à 20 s chacune). En démo, Claude et les générateurs vidéo sont simulés, rien n'est publié, et tout
-va dans une base à part (`data/demo.db`, `data/demo/`) : la vraie base n'est jamais touchée.
+va dans une base à part (`data/demo.db`, `data/demo/`) : la vraie base n'est jamais touchée. La démo écoute sur le
+port 8788 et le vrai Loopcast sur 8787 : les deux tournent en même temps sans se gêner.
 
 ## 2. Brancher les vraies clés (jamais dans git ni dans settings.yaml)
 

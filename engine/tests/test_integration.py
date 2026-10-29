@@ -41,7 +41,7 @@ def test_demo_never_touches_the_real_base(tmp_path, monkeypatch):
     real_connect = db.connect
     monkeypatch.setattr(db, "connect", lambda path, **kw: opened.append(str(path)) or real_connect(path, **kw))
     served, workers = [], []
-    monkeypatch.setattr("uvicorn.run", lambda app, **kw: served.append(app))
+    monkeypatch.setattr("uvicorn.run", lambda app, **kw: served.append((app, kw["port"])))
 
     def fake_worker(db_path, config, stop, **kw):
         workers.append((db_path, kw["services"]))
@@ -50,6 +50,7 @@ def test_demo_never_touches_the_real_base(tmp_path, monkeypatch):
     monkeypatch.setattr(jobs, "run_worker", fake_worker)
 
     assert cli.main(["serve", "--demo", "--no-supervise", "--no-jobs"]) == 0
+    assert cli.main(["--demo", "serve", "--no-supervise", "--no-jobs", "--port", "9000"]) == 0
     assert cli.main(["worker", "--demo"]) == 0
     assert cli.main(["farm", "list", "--demo"]) == 0
     assert cli.main(["--demo", "jobs", "list"]) == 0
@@ -57,7 +58,8 @@ def test_demo_never_touches_the_real_base(tmp_path, monkeypatch):
     demo_db = str(tmp_path / "data" / "demo.db")
     assert opened and set(opened) == {demo_db}
     assert not (tmp_path / "data" / "loopcast.db").exists()
-    app = served[0]
+    app, port = served[0]
+    assert port == 8788 and served[1][1] == 9000        # à côté du vrai Loopcast (8787), sauf --port explicite
     assert app.state.db_path == demo_db and app.state.config.data_dir == tmp_path / "data" / "demo"
     assert app.state.config.out_dir == tmp_path / "data" / "demo" / "out"
     assert "ntfy_url" not in app.state.config.settings["notify"]          # pas de push démo vers l'équipe

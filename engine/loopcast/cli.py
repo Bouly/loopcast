@@ -15,6 +15,9 @@ import httpx
 from loopcast import config as cfg
 from loopcast import db
 
+PORT = 8787             # le vrai Loopcast (service au démarrage, tailscale serve, proxy du front de dev)
+DEMO_PORT = 8788        # la démo, lancée à côté du vrai Loopcast sans conflit de port
+
 
 def _setup(args) -> tuple[cfg.Config, object]:
     """Configuration et base de la commande. `--demo` : configuration de démo (config.as_demo), donc base
@@ -54,9 +57,10 @@ def cmd_serve(args) -> int:
     if args.host not in ("127.0.0.1", "localhost") and not args.host.startswith("100."):
         print("Attention : n'écouter que sur 127.0.0.1 ou l'adresse Tailscale (100.x), jamais sur internet.",
               file=sys.stderr)
+    port = args.port if args.port is not None else (DEMO_PORT if config.demo else PORT)
     # Les flux en direct (/api/live) restent ouverts tant qu'un navigateur regarde : sans délai, l'arrêt (ou un
     # redémarrage par launchd) attendrait indéfiniment qu'on ferme l'onglet.
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info", timeout_graceful_shutdown=3)
+    uvicorn.run(app, host=args.host, port=port, log_level="info", timeout_graceful_shutdown=3)
     return 0
 
 
@@ -214,9 +218,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="toute commande sur la base de démo (data/demo.db, fichiers sous data/demo/) : rien de réel")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("serve", help="API (et front construit) sur http://127.0.0.1:8787")
+    s = sub.add_parser("serve", help=f"API (et front construit) sur http://127.0.0.1:{PORT} ({DEMO_PORT} en démo)")
     s.add_argument("--host", default="127.0.0.1")
-    s.add_argument("--port", type=int, default=8787)
+    s.add_argument("--port", type=int, help=f"par défaut {PORT}, ou {DEMO_PORT} avec --demo")
     s.add_argument("--no-supervise", action="store_true", help="ne pas lancer la supervision en fond")
     s.add_argument("--demo", action="store_true", help="iPhones simulés et Claude en démo (sans clé ni téléphone)")
     s.add_argument("--no-jobs", action="store_true", help="ne pas exécuter la file de tâches (pipeline)")

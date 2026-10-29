@@ -190,7 +190,8 @@ CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, account_id TE
 
 ### 5.4 API + front (`api/`, `web/`)
 
-- `python -m loopcast serve` → FastAPI sur `http://localhost:8787`, sert aussi le build de `web/`.
+- `python -m loopcast serve` → FastAPI sur `http://localhost:8787`, sert aussi le build de `web/` ; la démo
+  (`serve --demo`) écoute sur 8788, pour tourner à côté.
 - Accès à distance : Tailscale sur le Mac (et sur les téléphones/ordis de l'équipe). Ne jamais exposer le port sur internet.
 - Écrans :
   1. **Validation** : une carte à la fois (vidéo ou carrousel d'images), légende, hashtags. → garder, ← jeter, `E` éditer la légende.

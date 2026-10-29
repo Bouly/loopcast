@@ -115,9 +115,10 @@ Pièges rencontrés lors de ce premier test, à refaire sur chaque nouveau Mac o
 docker run --rm -v "$PWD":/app -w /app/engine python:3.12-slim sh -c "pip install -q -e '.[dev]' && pytest -q"
 # build du front
 docker run --rm -v "$PWD/web":/web -w /web node:24 sh -c "npm ci && npm run build"
-# démo complète avec 2 iPhones simulés : http://127.0.0.1:8787
-docker run --rm -p 127.0.0.1:8787:8787 -e LOOPCAST_ROOT=/app -v "$PWD":/app -w /app/engine python:3.12-slim \
+# démo complète avec 2 iPhones simulés : http://127.0.0.1:8788
+docker run --rm -p 127.0.0.1:8788:8788 -e LOOPCAST_ROOT=/app -v "$PWD":/app -w /app/engine python:3.12-slim \
   sh -c "pip install -q -e . && python -m loopcast serve --demo --host 0.0.0.0"
 ```
 
-Front en dev avec rechargement à chaud : `cd web && npm run dev` (relaie `/api` vers le back sur 8787).
+Front en dev avec rechargement à chaud : `cd web && npm run dev` (relaie `/api` vers le back sur 8787 ; vers la
+démo : `LOOPCAST_API=http://127.0.0.1:8788 npm run dev`).
