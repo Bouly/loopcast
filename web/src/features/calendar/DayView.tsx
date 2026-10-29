@@ -93,7 +93,7 @@ function PostLine({ post, onOpen }: { post: Post; onOpen: () => void }) {
       <span className="cal-line-main">
         <span className="cal-line-top">
           <span className="cal-post-time">{post.local_time ?? "--:--"}</span>
-          <PostState status={post.status} />
+          <PostState post={post} />
           {post.status === "posted" && post.views !== null && <span className="cal-line-views">{viewsLabel(post.views)}</span>}
         </span>
         {problem && <span className={`cal-why${post.status === "failed" ? " is-bad" : ""}`}>{problem}</span>}

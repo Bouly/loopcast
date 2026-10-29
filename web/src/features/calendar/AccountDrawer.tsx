@@ -167,8 +167,8 @@ function TodaySection({ account, today, timezone }: { account: Account; today: s
             </>
           )}
         </dd>
-        <dt>Aujourd'hui</dt>
-        <dd>{counts ? capitalize(counts) : "Rien pour l'instant"}</dd>
+        <dt>Posts du jour</dt>
+        <dd>{counts ? capitalize(counts) : "Aucun pour l'instant"}</dd>
         {account.paused && (
           <>
             <dt>En pause</dt>
@@ -408,7 +408,7 @@ function DrawerPost({
       <div className="cal-dpost-main">
         <div className="cal-dpost-top">
           <span className="cal-dpost-when">{capitalize(when)}</span>
-          <PostState status={post.status} />
+          <PostState post={post} />
           {post.winner && <span className="badge">Gagnant</span>}
         </div>
         <div className="cal-dpost-sub">

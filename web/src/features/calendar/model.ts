@@ -129,9 +129,18 @@ export function lastLog(post: Post): string {
     .trim();
 }
 
-/** Pourquoi un post coince (échec, à finir, annulé) ; vide pour un post qui se passe bien. */
+/** Un post prévu après une tentative ratée : l'exécuteur le retente (10 puis 30 min), il faut le voir. */
+const retrying = (post: Post) => post.status === "scheduled" && post.attempts > 0;
+
+export function postState(post: Post): { label: string; tone: Tone } {
+  if (retrying(post)) return { label: "Nouvel essai", tone: "warn" };
+  return POST_STATE[post.status] ?? { label: post.status, tone: "idle" };
+}
+
+/** Pourquoi un post coince (échec, nouvel essai, à finir, annulé) ; vide pour un post qui se passe bien. */
 export function postProblem(post: Post): string {
-  return post.status === "failed" || post.status === "needs_human" || post.status === "skipped" ? capitalize(lastLog(post)) : "";
+  const stuck = retrying(post) || post.status === "failed" || post.status === "needs_human" || post.status === "skipped";
+  return stuck ? capitalize(lastLog(post)) : "";
 }
 
 const TODAY: [PostStatus, string, string][] = [

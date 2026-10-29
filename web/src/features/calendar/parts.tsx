@@ -1,16 +1,16 @@
 import { InstagramIcon, TiktokIcon } from "@hugeicons/core-free-icons";
 import { createContext, useContext, useEffect, useState } from "react";
 import { Icon } from "../../ui";
-import { postersAvailable, posterUrl, type Account, type PostStatus } from "./api";
-import { accountState, POST_STATE, type Tone } from "./model";
+import { postersAvailable, posterUrl, type Account, type Post } from "./api";
+import { accountState, postState, type Tone } from "./model";
 
 export function Dot({ tone }: { tone: Tone }) {
   return <span className={`dot ${tone}`} aria-hidden />;
 }
 
 /** L'état d'un post : pastille + libellé (jamais la couleur seule). */
-export function PostState({ status }: { status: PostStatus }) {
-  const s = POST_STATE[status] ?? { label: status, tone: "idle" as Tone };
+export function PostState({ post }: { post: Post }) {
+  const s = postState(post);
   return (
     <span className="cal-state">
       <Dot tone={s.tone} />

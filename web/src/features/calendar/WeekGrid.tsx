@@ -143,7 +143,7 @@ export function PostChip({ post, onOpen }: { post: Post; onOpen: () => void }) {
       <Thumb contentId={post.content_id} />
       <span className="cal-post-text">
         <span className="cal-post-time">{post.local_time ?? "--:--"}</span>
-        <PostState status={post.status} />
+        <PostState post={post} />
         {post.status === "posted" && post.views !== null && <span className="cal-post-views">{viewsLabel(post.views, true)}</span>}
       </span>
     </button>

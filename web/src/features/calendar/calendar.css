@@ -37,6 +37,7 @@
 .cal-thumb.md { width: 36px; border-radius: 6px; }
 
 .cal-err { margin: 8px 0 0; font-size: 12.5px; color: var(--destructive); }
+.cal .empty-state p { max-width: 560px; margin-inline: auto; }
 
 .cal-acc:focus-visible,
 .cal-post:focus-visible,
