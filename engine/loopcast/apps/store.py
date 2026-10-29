@@ -516,6 +516,10 @@ def delete_source(conn: sqlite3.Connection, app_id: str, source_id: int, *, now:
     with tx(conn):
         src = get_source(conn, app_id, source_id)
         conn.execute("DELETE FROM app_sources WHERE id=?", (source_id,))
+        # Sa lecture encore en attente n'a plus d'objet : sinon l'analyse attendrait une source disparue.
+        conn.execute("""UPDATE jobs SET status='cancelled', updated_at=?, finished_at=?
+                        WHERE kind='apps.ingest_source' AND status='queued' AND (key=? OR key LIKE ?)""",
+                     (iso(now), iso(now), f"apps.ingest_source:{source_id}", f"apps.ingest_source:{source_id}:%"))
         for field, kind in URL_FIELDS:
             if src["kind"] == kind and src.get("url"):
                 conn.execute(f"UPDATE apps SET {field}=NULL, updated_at=? WHERE id=? AND {field}=?",

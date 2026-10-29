@@ -102,6 +102,8 @@ def test_deleting_a_link_source_removes_the_link(aconn, cfg, clock):
     sid = store.list_sources(aconn, "app")[0]["id"]
     store.delete_source(aconn, "app", sid, now=clock())
     assert store.get_app(aconn, "app")["website_url"] is None and store.list_sources(aconn, "app") == []
+    # Sa lecture en attente est annulée : l'analyse n'attend pas une source disparue.
+    assert job_row(aconn, f"apps.ingest_source:{sid}")["status"] == "cancelled"
 
 
 def test_pause_and_resume(aconn, cfg, clock):
