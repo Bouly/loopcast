@@ -214,7 +214,11 @@ def candidates(conn: sqlite3.Connection, account: Account) -> list[dict]:
 def create_post(conn: sqlite3.Connection, account: Account, content_id: str, when: datetime, now: datetime,
                 message: str) -> int | None:
     """Crée le post (ou reprend la ligne « skipped » du même contenu sur cette plateforme).
-    None si le contenu est déjà pris sur cette plateforme (index unique posts(content_id, platform))."""
+    None si le contenu est déjà pris sur cette plateforme (index unique posts(content_id, platform)).
+
+    La reprise remet attempts à 0 mais change `planned_at` : la clé de la tâche de publication
+    (executor.publish_key) contient ce créneau, donc la nouvelle planification a sa propre tâche au lieu de
+    retomber sur celle, déjà terminée, de la planification annulée."""
     row = conn.execute("SELECT id, status FROM posts WHERE content_id=? AND platform=?",
                        (content_id, account.platform)).fetchone()
     if row is not None:

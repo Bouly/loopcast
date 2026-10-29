@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from loopcast import jobs
@@ -33,20 +33,29 @@ log = logging.getLogger(__name__)
 TICK_HORIZON_MINUTES = 10           # on enfile les posts dus d'ici le prochain tour
 
 
-def publish_key(post_id: int, attempts: int) -> str:
-    return f"diffusion.publish:{post_id}:{attempts}"
+def publish_key(post_id: int, attempts: int, planned_at: datetime | str | None = None) -> str:
+    """Clé d'idempotence d'une tentative : le post, le créneau planifié (`planned_at`) et le numéro de tentative.
+
+    Le créneau est dans la clé parce qu'un post « skipped » replanifié reprend la même ligne avec attempts=0 :
+    sans lui, la clé de la nouvelle planification serait celle d'une tâche déjà terminée (qui avait vu
+    « skipped »), jobs.enqueue renverrait cette tâche et le post ne partirait plus jamais."""
+    planned = parse_dt(planned_at) if isinstance(planned_at, str) else planned_at
+    slot = planned.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S") if planned else "-"
+    return f"diffusion.publish:{post_id}:{slot}:{attempts}"
 
 
 def enqueue_due(conn: sqlite3.Connection, now: datetime, horizon_minutes: int = TICK_HORIZON_MINUTES) -> list[int]:
     """Une tâche diffusion.publish par post prévu d'ici `horizon_minutes`, à l'heure de son créneau."""
     rows = conn.execute(
-        "SELECT id, attempts, scheduled_at, app_id FROM posts WHERE status='scheduled' AND scheduled_at <= ? "
+        "SELECT id, attempts, scheduled_at, planned_at, app_id FROM posts WHERE status='scheduled' AND scheduled_at <= ? "
         "ORDER BY scheduled_at, id", (iso(now + timedelta(minutes=horizon_minutes)),)).fetchall()
     out = []
     for r in rows:
         when = max(parse_dt(r["scheduled_at"]), now)
-        jobs.enqueue(conn, "diffusion.publish", {"post_id": r["id"], "attempt": r["attempts"]},
-                     key=publish_key(r["id"], r["attempts"]), app_id=r["app_id"], run_after=when, clock=lambda: now)
+        planned = r["planned_at"] or r["scheduled_at"]
+        jobs.enqueue(conn, "diffusion.publish", {"post_id": r["id"], "attempt": r["attempts"], "planned_at": planned},
+                     key=publish_key(r["id"], r["attempts"], planned), app_id=r["app_id"], run_after=when,
+                     clock=lambda: now)
         out.append(r["id"])
     return out
 
@@ -129,7 +138,8 @@ def publish_post(conn: sqlite3.Connection, config, post_id: int, *, publishers, 
     except Exception as e:  # noqa: BLE001 : un publisher qui plante = un échec du post, pas de la tâche
         log.warning("publication du post #%s : %s", post_id, e)
         result = PublishResult.failed(f"{type(e).__name__}: {e}")
-    return _apply(conn, s, post_id, account, publisher.name, attempt_no, result, clock(), notifier)
+    return _apply(conn, s, post_id, account, publisher.name, attempt_no, result, clock(), notifier,
+                  planned_at=post.planned_at or post.scheduled_at)
 
 
 def _refusal(conn, s: DiffusionSettings, post, now: datetime, notifier) -> str | None:
@@ -159,7 +169,7 @@ def _refusal(conn, s: DiffusionSettings, post, now: datetime, notifier) -> str |
 
 
 def _apply(conn, s: DiffusionSettings, post_id: int, account, publisher_name: str, attempt: int,
-           result: PublishResult, now: datetime, notifier) -> dict:
+           result: PublishResult, now: datetime, notifier, *, planned_at: datetime | None = None) -> dict:
     out = {"post_id": post_id, "status": result.status, "attempt": attempt, "log": result.log}
     with tx(conn):
         if result.status == "posted":
@@ -179,8 +189,10 @@ def _apply(conn, s: DiffusionSettings, post_id: int, account, publisher_name: st
             update_post(conn, post_id, now,
                         f"échec (tentative {attempt}/{s.max_attempts}) : {result.log} ; nouvelle tentative à "
                         f"{again.astimezone(s.tz):%H:%M}", status="scheduled", scheduled_at=again)
-            jobs.enqueue(conn, "diffusion.publish", {"post_id": post_id, "attempt": attempt},
-                         key=publish_key(post_id, attempt), app_id=account.app_id, run_after=again, clock=lambda: now)
+            jobs.enqueue(conn, "diffusion.publish",
+                         {"post_id": post_id, "attempt": attempt, "planned_at": iso(planned_at) if planned_at else None},
+                         key=publish_key(post_id, attempt, planned_at), app_id=account.app_id, run_after=again,
+                         clock=lambda: now)
             alerts.event(conn, now, "diffusion.retry",
                          f"{account.id} : post #{post_id} en échec ({result.log}), nouvel essai dans {delay} min",
                          account.id)

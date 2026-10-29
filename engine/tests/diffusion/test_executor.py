@@ -91,7 +91,49 @@ def test_two_retries_ten_then_thirty_minutes_then_failed(conn, cfg, clock, add_c
     assert "échec définitif après 3 tentative(s)" in messages(pid, conn)[-1]
     assert len(sent) == 1 and "après 3 tentative(s)" in sent[0][1]
     keys = [r[0] for r in conn.execute("SELECT key FROM jobs WHERE kind='diffusion.publish' ORDER BY id")]
-    assert keys == [f"diffusion.publish:{pid}:{n}" for n in range(3)]
+    assert keys == [executor.publish_key(pid, n, start) for n in range(3)]
+    assert keys[0] == f"diffusion.publish:{pid}:{start:%Y%m%dT%H%M%S}:0"
+
+
+def test_replanned_post_is_published(conn, cfg, settings, pubs, fake, clock, add_content):
+    """Un post annulé après que sa tâche a été enfilée (pause), puis replanifié : il part à son nouveau créneau.
+    Avant : la tâche de la première planification (terminée, elle avait vu « skipped ») avait la même clé que
+    celle de la nouvelle, jobs.enqueue la renvoyait et le post n'était plus jamais publié."""
+    add_content("c1")
+    pid = schedule(conn, clock, minutes=5)
+    executor.enqueue_due(conn, clock())                                   # tâche enfilée pour le créneau
+    regulator.pause(conn, cfg, "phone-1:tiktok", clock(), reason="vérification", hours=1, settings=settings)
+    clock.advance(minutes=5)
+    run_due(conn, cfg, clock, pubs)                                       # la tâche voit « skipped »
+    assert get_post(conn, pid).status == "skipped" and fake.calls == []
+    regulator.resume(conn, cfg, "phone-1:tiktok", clock(), settings=settings)
+    account = get_account(conn, "phone-1:tiktok")
+    assert planner.create_post(conn, account, "c1", clock() + timedelta(minutes=30), clock(), "test") == pid
+    clock.advance(minutes=30)
+    run_due(conn, cfg, clock, pubs)
+    assert get_post(conn, pid).status == "posted" and fake.calls == [("phone-1:tiktok", "c1")]
+
+
+def test_replanned_post_still_gets_its_retries(conn, cfg, settings, clock, add_content):
+    """Même piège sur le chemin des nouvelles tentatives : la tentative 2 d'une nouvelle planification ne doit
+    pas retomber sur la clé (terminée) de la tentative 2 de la planification précédente."""
+    fake = FakePublisher(["failed", "failed", "posted"])
+    pubs = Publishers(cfg, override=fake)
+    add_content("c1")
+    pid = schedule(conn, clock, minutes=0)
+    run_due(conn, cfg, clock, pubs)                                       # tentative 1 : échec, essai à +10 min
+    regulator.pause(conn, cfg, "phone-1:tiktok", clock(), reason="vérification", hours=1, settings=settings)
+    clock.advance(minutes=10)
+    run_due(conn, cfg, clock, pubs)                                       # l'essai voit « skipped »
+    regulator.resume(conn, cfg, "phone-1:tiktok", clock(), settings=settings)
+    account = get_account(conn, "phone-1:tiktok")
+    planner.create_post(conn, account, "c1", clock() + timedelta(minutes=5), clock(), "test")
+    clock.advance(minutes=5)
+    run_due(conn, cfg, clock, pubs)                                       # nouvelle planification : échec
+    assert (get_post(conn, pid).status, get_post(conn, pid).attempts) == ("scheduled", 1)
+    clock.advance(minutes=10)
+    run_due(conn, cfg, clock, pubs)                                       # son nouvel essai part
+    assert get_post(conn, pid).status == "posted" and len(fake.calls) == 3
 
 
 def test_crash_in_publisher_counts_as_a_failed_attempt(conn, cfg, clock, add_content):
