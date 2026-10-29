@@ -25,11 +25,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from loopcast.config import Config
-from loopcast.farm.backend import DeviceBackend
+from loopcast.farm import registry
+from loopcast.farm.backend import DeviceBackend, model_name
 from loopcast.farm.control import BUNDLES, ControlError, PhoneController
 from loopcast.farm.health import FARM_EVENT_KINDS, make_checks, status_dict
 from loopcast.farm.live import EventBus, ScreenCache
-from loopcast.farm.supervisor import Supervisor, list_phones
+from loopcast.farm.supervisor import Supervisor, add_event, list_phones, utcnow
 from loopcast.notify import is_alert, notify
 
 
@@ -56,6 +57,12 @@ class Button(BaseModel):
 
 class App(BaseModel):
     app: str            # clé de BUNDLES (tiktok, instagram…) ou bundle id complet
+
+
+class Adopt(BaseModel):
+    phone_id: str | None = Field(None, max_length=40)     # une ligne de devices.yaml ; None : une nouvelle ligne
+    owner: str = Field("", max_length=80)
+    lang: str = Field("fr", pattern="^(fr|en)$")          # langue d'une nouvelle ligne
 
 
 # --- Contrôle d'origine (CSRF) -------------------------------------------------------------------------------
@@ -239,6 +246,36 @@ def create_app(
         result = supervisor.tick()
         on_tick(result)
         return {"seen": result.seen, "events": len(result.events)}
+
+    # --- ajouter un iPhone à la ferme (farm/registry.py) ---------------------------------------
+
+    def connected() -> set[str]:
+        return {r["udid"] for r in conn.execute("SELECT udid FROM phones WHERE status != 'offline'")}
+
+    @app.get("/api/farm/slots")
+    def farm_slots():
+        """Les lignes de devices.yaml où un nouvel iPhone peut aller, et si le dashboard peut écrire le fichier."""
+        return {"slots": registry.slots(config, connected()), "writable": not config.demo}
+
+    @app.post("/api/phones/{udid}/adopt")
+    def adopt(udid: str, body: Adopt):
+        """Ajoute un iPhone branché à la ferme : son UDID s'écrit dans devices.yaml, la ferme le prend aussitôt."""
+        row = known(udid)
+        slot = config.phone_by_id(body.phone_id) if body.phone_id else None
+        replaced = slot.udid if slot else None     # l'iPhone que le nouveau remplace, s'il y en a un
+        try:
+            phone = registry.adopt(config, udid, body.phone_id, connected=connected(), owner=body.owner,
+                                   model=model_name(row["model"] or ""), lang=body.lang)
+        except registry.RegistryError as e:
+            raise HTTPException(409, str(e)) from e
+        if replaced:    # l'iPhone remplacé quitte la ferme : son ancienne ligne ne porte plus le nom de la place
+            conn.execute("UPDATE phones SET phone_id=NULL WHERE udid=?", (replaced,))
+        what = model_name(row["model"] or "") or row["name"] or "iPhone"
+        message = f"{what} ajouté à la ferme : {phone.id}"
+        add_event(conn, utcnow(), udid, "phone_adopted", message)
+        on_events([(udid, "phone_adopted", message)])
+        on_tick(supervisor.tick())          # la ligne de l'iPhone porte tout de suite son nom de la ferme
+        return next(r for r in list_phones(conn, config) if r["udid"] == udid)
 
     @app.get("/api/farm/status")
     def farm_status():

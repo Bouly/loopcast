@@ -5,13 +5,13 @@ export function Icon({ icon, size = 16, className }: { icon: IconSvgElement; siz
   return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.6} className={className} aria-hidden />;
 }
 
-export type Tone = "ok" | "warn" | "bad" | "idle";
+export type Tone = "ok" | "warn" | "bad" | "idle" | "info";
 
 export const STATUS: Record<Phone["status"], { label: string; tone: Tone }> = {
   ok: { label: "Prêt", tone: "ok" },
   attention: { label: "À vérifier", tone: "warn" },
   offline: { label: "Débranché", tone: "bad" },
-  unknown: { label: "Non déclaré", tone: "bad" },
+  unknown: { label: "À ajouter", tone: "info" },
   never_seen: { label: "Jamais branché", tone: "idle" },
 };
 

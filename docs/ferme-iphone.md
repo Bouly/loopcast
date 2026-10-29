@@ -63,8 +63,17 @@ Empêcher la veille : `sudo pmset -a sleep 0 disablesleep 1`.
 1. Le brancher au hub, le déverrouiller, appuyer sur **« Faire confiance »** et entrer le code.
 2. Faire apparaître puis activer le **mode développeur** : brancher l'iPhone et ouvrir Xcode (Window › Devices and Simulators) suffit à faire apparaître l'option ; ensuite Réglages › Confidentialité et sécurité › Mode développeur → activer, l'iPhone redémarre, confirmer.
 3. Réglages de l'iPhone pour qu'il reste pilotable : Luminosité et affichage › Verrouillage auto › **Jamais** ; désactiver les mises à jour iOS automatiques.
-4. Sur le Mac : `python -m loopcast farm list` → copier l'**UDID** dans `config/devices.yaml` sur la bonne ligne (`phone-1`…). Le rang dans ce fichier fixe les ports de l'iPhone : ne pas réordonner les lignes.
-5. Dans le dashboard, ouvrir l'iPhone › **Prendre la main**. La première fois, Xcode compile et installe WebDriverAgent (1 à 3 min). Si iOS bloque l'app : Réglages › Général › VPN et gestion de l'appareil › faire confiance au certificat de l'équipe, puis recommencer.
+4. Page Ferme : le bandeau « Nouvel iPhone branché » et la tuile « Nouvel iPhone » mènent à **L'ajouter à la ferme**.
+   Le parcours coche tout seul la confiance et le mode développeur, puis propose sa place : une ligne libre de
+   `config/devices.yaml` (avec sa langue et ses comptes), le remplacement d'un iPhone débranché (le nouveau reprend
+   ses comptes) ou une nouvelle ligne. Loopcast écrit l'UDID dans le fichier sans toucher au reste (commentaires et
+   ordre des lignes, qui fixe les ports) et le prend en compte sans redémarrage. Rien ne s'ajoute sans ce clic : un
+   iPhone branché pour charger n'est jamais piloté. Bloqué en démo, qui lit le même fichier.
+   À la main, ça reste possible : `python -m loopcast farm list`, copier l'**UDID** sur la bonne ligne (sans
+   réordonner), puis relancer Loopcast, qui ne relit pas le fichier en marche.
+5. Dans le même parcours : **Installer le pilotage**, c'est-à-dire une première prise en main. Xcode compile et
+   installe WebDriverAgent (1 à 3 min, iPhone déverrouillé). Si iOS bloque l'app : Réglages › Général › VPN et
+   gestion de l'appareil › faire confiance au certificat de l'équipe, puis réessayer.
 
 ## 3. Lancer
 

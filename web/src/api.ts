@@ -38,6 +38,21 @@ export type FarmStatus = {
 
 export type Size = { width: number; height: number };
 
+/** Une ligne de config/devices.yaml : où un nouvel iPhone peut aller (engine/loopcast/farm/registry.py). */
+export type FarmSlot = {
+  phone_id: string;
+  udid: string | null;
+  free: boolean;
+  /** L'iPhone de cette ligne répond en ce moment : impossible de le remplacer. */
+  connected: boolean;
+  lang: string;
+  owner: string;
+  apps: string[];
+  accounts: Record<string, string>;
+};
+export type FarmSlots = { slots: FarmSlot[]; writable: boolean };
+export type Adoption = { phone_id: string | null; owner: string; lang: "fr" | "en" };
+
 /** Appel JSON à l'API : lève une Error avec le message du serveur (`detail`) si la réponse n'est pas OK. */
 export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
@@ -57,6 +72,8 @@ export const api = {
   events: (limit = 80) => call<LogEvent[]>("GET", `/api/events?limit=${limit}`),
   refresh: () => call<{ seen: number }>("POST", "/api/farm/refresh"),
   farm: () => call<FarmStatus>("GET", "/api/farm/status"),
+  slots: () => call<FarmSlots>("GET", "/api/farm/slots"),
+  adopt: (udid: string, body: Adoption) => call<Phone>("POST", `${phone(udid)}/adopt`, body),
   take: (udid: string) => call<{ session_id: string; size: Size }>("POST", `${phone(udid)}/session`),
   release: (udid: string) => call("DELETE", `${phone(udid)}/session`),
   size: (udid: string) => call<Size>("GET", `${phone(udid)}/size`),

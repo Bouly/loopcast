@@ -430,9 +430,11 @@
 .rv-phone.attention .rv-phone-n { color: var(--warn); }
 .rv-phone.offline .rv-phone-screen { box-shadow: 0 0 0 2px var(--destructive); }
 .rv-phone.offline .rv-phone-n { color: var(--destructive); }
-.rv-phone.never_seen, .rv-phone.unknown { opacity: 0.5; }
-.rv-phone.never_seen .rv-phone-screen, .rv-phone.unknown .rv-phone-screen { background: var(--muted); }
-.rv-phone.never_seen .rv-phone-n, .rv-phone.unknown .rv-phone-n { color: var(--muted-foreground); }
+.rv-phone.never_seen { opacity: 0.5; }
+.rv-phone.never_seen .rv-phone-screen { background: var(--muted); }
+.rv-phone.never_seen .rv-phone-n { color: var(--muted-foreground); }
+.rv-phone.unknown .rv-phone-screen { box-shadow: 0 0 0 2px var(--info); }
+.rv-phone.unknown .rv-phone-n { color: var(--info); }
 
 /* À finir : ce qui attend quelqu'un, chaque ligne mène à l'écran où le faire */
 .rv-todo { gap: 4px; }

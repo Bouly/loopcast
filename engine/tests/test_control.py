@@ -5,7 +5,7 @@ import httpx
 import pytest
 from conftest import UDID1
 
-from loopcast.farm.control import ControlError, PhoneController, capabilities
+from loopcast.farm.control import ControlError, PhoneController, capabilities, wda_failure_hint
 from loopcast.farm.supervisor import Supervisor
 
 
@@ -90,7 +90,7 @@ def test_gestures(ctl, appium):
 def test_errors(ctl, config):
     with pytest.raises(ControlError, match="pas de session"):
         ctl.tap(UDID1, 1, 1)
-    with pytest.raises(ControlError, match="inconnu"):
+    with pytest.raises(ControlError, match="pas encore ajouté à la ferme"):
         ctl.start("00008110-STRANGER")
     ctl.start(UDID1)
     with pytest.raises(ControlError, match="bouton inconnu"):
@@ -120,3 +120,36 @@ def test_dead_session_is_forgotten(ctl, appium):
     with pytest.raises(ControlError, match="session perdue"):
         ctl.tap(UDID1, 1, 1)
     assert ctl.session_id(UDID1) is None    # l'UI repropose « Prendre la main »
+
+
+def _fake_xcrun(tmp_path, report: str):
+    """Un faux `xcrun` qui imprime `report` comme le ferait `xcresulttool get test-results summary`."""
+    script = tmp_path / "xcrun"
+    script.write_text(f"#!/bin/sh\ncat <<'EOF'\n{report}\nEOF\n")
+    script.chmod(0o755)
+    return str(script)
+
+
+def test_a_wda_launch_failure_is_explained_from_xcodes_report(tmp_path):
+    derived = tmp_path / "wda"
+    (derived / "Logs" / "Test" / "Test-WebDriverAgentRunner.xcresult").mkdir(parents=True)
+    report = ('{"devicesAndConfigurations": [], "testFailures": [{"failureText": "Failed to install or launch the '
+              'test runner. (Underlying Error: The application could not be launched because the Developer App '
+              'Certificate is not trusted.)"}]}')
+    hint = wda_failure_hint(derived, since=0, xcrun=_fake_xcrun(tmp_path, report))
+    assert hint.startswith("iOS ne fait pas encore confiance au certificat") and "VPN et gestion" in hint
+    assert wda_failure_hint(derived, since=0, xcrun=_fake_xcrun(tmp_path, "{}")) is None     # cause inconnue
+    assert wda_failure_hint(tmp_path / "rien", since=0) is None                                # aucun rapport
+
+
+def test_start_says_why_wda_did_not_start(ctl, appium, config, monkeypatch):
+    def refuse(request):
+        if request.url.path == "/session":
+            return httpx.Response(500, json={"value": {"error": "unknown error", "message":
+                                  "Unable to launch WebDriverAgent. Original error: xcodebuild failed with code 65"}})
+        return appium(request)
+
+    ctl.http = httpx.Client(transport=httpx.MockTransport(refuse), base_url="http://appium")
+    monkeypatch.setattr("loopcast.farm.control.wda_failure_hint", lambda derived, since: "L'iPhone est verrouillé.")
+    with pytest.raises(ControlError, match="L'iPhone est verrouillé"):
+        ctl.start(UDID1)

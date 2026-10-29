@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from conftest import UDID1
+from conftest import UDID1, UDID2
 from fastapi.testclient import TestClient
 from test_control import FakeAppium
 
@@ -46,6 +46,30 @@ def test_control_flow(api):
 
 def test_unknown_phone_404(api):
     assert api.get("/api/phones/nope/screenshot").status_code == 404
+
+
+def test_a_new_iphone_is_added_from_the_dashboard_and_piloted_without_restart(api, backend, config):
+    from test_registry import DEVICES, NEW
+
+    from loopcast.farm.backend import DeviceInfo
+
+    (config.root / "config").mkdir()
+    (config.root / "config" / "devices.yaml").write_text(DEVICES)
+    backend.devices.append(DeviceInfo(NEW, "iPhone", "iPhone13,1", "18.3.1"))
+    api.post("/api/farm/refresh")
+    new = next(p for p in api.get("/api/phones").json() if p["udid"] == NEW)
+    assert new["status"] == "unknown" and new["phone_id"] is None
+    assert api.post(f"/api/phones/{NEW}/session").status_code == 409      # pas encore de la ferme : pas de pilotage
+
+    slots = api.get("/api/farm/slots").json()
+    assert slots["writable"] and [s["phone_id"] for s in slots["slots"] if s["free"]] == ["phone-3"]
+
+    r = api.post(f"/api/phones/{NEW}/adopt", json={"phone_id": "phone-3", "owner": "Ahmed"})
+    assert r.status_code == 200, r.text
+    assert (r.json()["phone_id"], r.json()["status"], r.json()["owner"]) == ("phone-3", "ok", "Ahmed")
+    assert api.get("/api/events").json()[0]["message"] == "iPhone 12 mini ajouté à la ferme : phone-3"
+    assert api.post(f"/api/phones/{NEW}/session").status_code == 200      # pilotable tout de suite
+    assert api.post(f"/api/phones/{NEW}/adopt", json={"phone_id": None}).status_code == 409
 
 
 def test_spa_fallback(api):
@@ -109,3 +133,23 @@ def test_farm_status_and_farm_events_in_the_log(api, conn):
                      ("2026-10-29T17:00:00+00:00", kind, message))
     kinds = [e["kind"] for e in api.get("/api/events").json()]
     assert "problem_appium_down" in kinds and "ideas.generated" not in kinds
+
+
+def test_a_replaced_iphone_leaves_the_wall(api, backend, config):
+    """Remplacer phone-2 débranché : le nouveau prend la place, l'ancien n'apparaît plus en double."""
+    from test_registry import DEVICES, NEW
+
+    from loopcast.farm.backend import DeviceInfo
+
+    (config.root / "config").mkdir()
+    (config.root / "config" / "devices.yaml").write_text(DEVICES)
+    old = DeviceInfo(UDID2, "iPhone de Yanis", "iPhone14,2", "26.0")
+    backend.devices.append(old)
+    api.post("/api/farm/refresh")
+    backend.devices.remove(old)                         # phone-2 débranché
+    backend.devices.append(DeviceInfo(NEW, "iPhone", "iPhone13,1", "18.3.1"))
+    api.post("/api/farm/refresh")
+    assert api.post(f"/api/phones/{NEW}/adopt", json={"phone_id": "phone-2"}).status_code == 200
+    phones = api.get("/api/phones").json()
+    assert [p["udid"] for p in phones if p["phone_id"] == "phone-2"] == [NEW]
+    assert all(p["udid"] != UDID2 for p in phones)

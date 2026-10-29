@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import base64
 import sqlite3
+import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +24,30 @@ from loopcast.config import Config, PhoneConfig
 
 class ControlError(RuntimeError):
     pass
+
+
+# Quand WebDriverAgent ne démarre pas, Appium ne dit que « xcodebuild failed with code 65 » : la vraie cause
+# est dans le rapport de test d'Xcode (data/wda/<UDID>/Logs/Test/*.xcresult). Les causes connues, en clair :
+WDA_HINTS = (
+    ("Developer App Certificate is not trusted",
+     "iOS ne fait pas encore confiance au certificat de développeur. Sur l'iPhone : Réglages › Général › "
+     "VPN et gestion de l'appareil › le certificat « Apple Development » › Faire confiance, puis réessayer."),
+    ("is locked", "L'iPhone est verrouillé : le déverrouiller, puis réessayer."),
+)
+
+
+def wda_failure_hint(derived: Path, since: float, xcrun: str = "xcrun") -> str | None:
+    """La cause d'un démarrage raté de WebDriverAgent, lue dans le rapport de test écrit après `since`."""
+    reports = [r for r in (derived / "Logs" / "Test").glob("*.xcresult") if r.stat().st_mtime >= since - 5]
+    if not reports:
+        return None
+    latest = max(reports, key=lambda r: r.stat().st_mtime)
+    try:
+        out = subprocess.run([xcrun, "xcresulttool", "get", "test-results", "summary", "--path", str(latest)],
+                             capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return next((hint for needle, hint in WDA_HINTS if needle.lower() in out.lower()), None)
 
 
 @dataclass
@@ -92,7 +118,8 @@ class PhoneController:
     def _phone(self, udid: str) -> PhoneConfig:
         phone = self.config.phone_by_udid(udid)
         if phone is None:
-            raise ControlError("iPhone inconnu : l'ajouter dans config/devices.yaml avant de le piloter")
+            raise ControlError("iPhone pas encore ajouté à la ferme : l'ajouter depuis la page Ferme "
+                               "avant de le piloter")
         return phone
 
     def session_id(self, udid: str) -> str | None:
@@ -108,9 +135,15 @@ class PhoneController:
         if existing and self._alive(existing):
             return existing
         phone = self._phone(udid)
-        Path(self.config.data_dir / "wda" / udid).mkdir(parents=True, exist_ok=True)
+        derived = self.config.data_dir / "wda" / udid
+        derived.mkdir(parents=True, exist_ok=True)
         body = {"capabilities": {"alwaysMatch": capabilities(self.config, phone), "firstMatch": [{}]}}
-        value = self._call("POST", "/session", body)
+        started = time.time()
+        try:
+            value = self._call("POST", "/session", body)
+        except ControlError as e:
+            hint = wda_failure_hint(derived, started) if "xcodebuild failed" in str(e) else None
+            raise ControlError(hint or str(e)) from e
         session_id = value.get("sessionId")
         if not session_id:
             raise ControlError(f"réponse Appium inattendue : {value}")

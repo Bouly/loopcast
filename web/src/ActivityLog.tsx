@@ -11,7 +11,9 @@ const BLOCKING = ["farm_error", "phone_gone", "problem_offline", "problem_appium
 function tone(kind: string) {
   if (BLOCKING.includes(kind)) return { icon: Alert02Icon, cls: "ic-bad" };
   if (kind.startsWith("problem_")) return { icon: Alert02Icon, cls: "ic-warn" };
-  if (kind.startsWith("resolved_") || kind === "phone_back") return { icon: CheckmarkCircle02Icon, cls: "ic-ok" };
+  if (kind.startsWith("resolved_") || kind === "phone_back" || kind === "phone_adopted") {
+    return { icon: CheckmarkCircle02Icon, cls: "ic-ok" };
+  }
   return { icon: InformationCircleIcon, cls: "ic-info" };
 }
 

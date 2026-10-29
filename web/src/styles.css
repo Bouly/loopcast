@@ -392,8 +392,9 @@ button.fm-phone { cursor: pointer; }
 button.fm-phone:hover .fm-device { transform: translateY(-3px); }
 .fm-phone:focus-visible { outline: none; }
 .fm-phone:focus-visible .fm-device { outline: 2px solid var(--ring); outline-offset: 4px; }
-.fm-phone.attention .fm-device, .fm-phone.unknown .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--warn); }
-.fm-phone.unknown .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--destructive); }
+.fm-phone.attention .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--warn); }
+/* Un iPhone branché mais pas encore de la ferme : une invitation (bleu), pas une alerte */
+.fm-phone.unknown .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--info); }
 .fm-phone.piloted .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--info); }
 .fm-phone[aria-current="true"] .fm-device { box-shadow: inset 0 0 0 1px var(--bezel-edge), 0 0 0 2px var(--foreground); }
 .fm-phone.offline .fm-device { opacity: 0.6; }
@@ -405,7 +406,118 @@ button.fm-phone:hover .fm-device { transform: translateY(-3px); }
 .fm-sub { font-size: 13.5px; line-height: 1.4; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .fm-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 5px; font-size: 14px; }
 .fm-meta .problem { margin-top: 2px; font-size: 13.5px; }
+.fm-cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 14px; font-weight: 650; color: var(--foreground); }
+.fm-cta svg { transition: transform 120ms var(--ease); }
+button.fm-phone:hover .fm-cta svg { transform: translateX(2px); }
 .fm-empty { padding: 56px 24px; }
+.banner.fm-new { align-items: center; }
+.banner.fm-new > div { flex: 1; }
+.banner.fm-new strong { color: var(--foreground); }
+.banner.fm-new .ic-info { color: var(--info); }
+
+/* ---------- Ajouter un iPhone à la ferme : le parcours, étape par étape ---------- */
+
+.drawer.ob-drawer { width: min(840px, 100vw); }
+.drawer-body.ob-body { grid-template-columns: 196px minmax(0, 1fr); gap: 32px; padding: 24px; }
+.ob-aside { display: grid; gap: 12px; align-content: start; }
+.ob-device { width: 100%; }
+.ob-aside .fm-off { font-size: 72px; }
+.ob-udid { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.ob-main { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.ob-steps { display: grid; margin: 0; padding: 0; list-style: none; }
+.ob-step { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 14px; padding: 18px 0; border-top: 1px solid var(--border); }
+.ob-step:first-child { padding-top: 0; border-top: 0; }
+.ob-step-n {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted-foreground);
+}
+.ob-step.now .ob-step-n { border-color: var(--foreground); color: var(--foreground); }
+.ob-step.done .ob-step-n { border-color: var(--keep); background: var(--keep); color: var(--keep-foreground); }
+.ob-step.later { opacity: 0.45; }
+.ob-step-body { display: grid; gap: 10px; min-width: 0; }
+.ob-step h3 { margin: 4px 0 0; font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
+.ob-step p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--soft-foreground); }
+.ob-step.done p { color: var(--muted-foreground); }
+.ob-step-body > .btn { justify-self: start; }
+
+.ob-places { display: grid; gap: 8px; }
+.ob-place {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+.ob-place:hover { background: var(--muted); }
+.ob-place[aria-checked="true"] { border-color: var(--foreground); background: var(--muted); }
+.ob-place:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.ob-place strong { font-size: 15px; font-weight: 650; }
+.ob-place span { font-size: 13.5px; line-height: 1.4; color: var(--muted-foreground); }
+.ob-place .ob-warn { color: var(--warn); }
+.ob-owner { display: grid; gap: 6px; max-width: 320px; font-size: 13.5px; color: var(--muted-foreground); }
+.ob-owner .field { width: 100%; color: var(--foreground); }
+.ob-error, .ob-step .ob-error p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--destructive); }
+.ob-error { display: grid; gap: 6px; }
+.ob-alert { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 14.5px; color: var(--warn); }
+.ob-alert svg { flex: none; margin-top: 3px; }
+.ob-step p.ob-running { display: flex; align-items: center; gap: 10px; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.ob-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--foreground);
+  animation: ob-spin 900ms linear infinite;
+}
+@keyframes ob-spin { to { transform: rotate(360deg); } }
+.ob-checks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ob-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: calc(100% + 20px);
+  margin: 0 -10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.ob-check:hover { background: var(--muted); }
+.ob-check:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
+.ob-check > span:last-child { display: grid; gap: 1px; }
+.ob-check strong { font-size: 14.5px; font-weight: 600; }
+.ob-check > span:last-child > span { font-size: 13px; color: var(--muted-foreground); }
+.ob-box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 1.5px solid var(--input);
+  border-radius: 6px;
+}
+.ob-check[aria-checked="true"] .ob-box { border-color: var(--keep); background: var(--keep); color: var(--keep-foreground); }
+.ob-done { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 18px; border-top: 1px solid var(--border); }
+.ob-done > svg { flex: none; color: var(--ok); }
+.ob-done > div { flex: 1 1 220px; }
+.ob-done strong { font-size: 16px; font-weight: 650; }
+.ob-done p { margin: 2px 0 0; font-size: 14px; color: var(--muted-foreground); }
 
 /* Activité : une liste sous le mur, sans cadre */
 .fm-activity { margin-top: 64px; padding-top: 28px; border-top: 1px solid var(--border); }
@@ -725,6 +837,9 @@ button.fm-phone:hover .fm-device { transform: translateY(-3px); }
   .row .col-battery { grid-column: 2; grid-row: 1; justify-self: end; }
   .drawer-body { grid-template-columns: 1fr; }
   .device { margin: 0 auto; width: min(300px, 100%); }
+  .drawer-body.ob-body { grid-template-columns: 1fr; gap: 20px; }
+  .ob-aside { grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 14px; }
+  .ob-aside .fm-off { font-size: 36px; }
 }
 @media (max-width: 640px) {
   /* Sur téléphone, la navigation passe sur une seconde ligne qui défile : toutes les sections restent atteignables. */

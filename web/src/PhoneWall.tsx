@@ -1,4 +1,10 @@
-import { BatteryChargingIcon, BatteryFullIcon, BatteryLowIcon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowRight01Icon,
+  BatteryChargingIcon,
+  BatteryFullIcon,
+  BatteryLowIcon,
+  SmartPhone01Icon,
+} from "@hugeicons/core-free-icons";
 import { memo, useEffect, useState } from "react";
 import { api, type Phone } from "./api";
 import { agoInSentence } from "./format";
@@ -6,8 +12,8 @@ import { Icon, StatusDot, problemTone } from "./ui";
 
 const reachable = (p: Phone) => p.udid !== null && p.status !== "offline" && p.status !== "never_seen";
 
-/** « phone-3 » → « 3 » : le numéro s'affiche en grand sur l'écran éteint. */
-const numberOf = (p: Phone) => p.phone_id?.replace(/^phone-/, "") || "?";
+/** « phone-3 » → « 3 » : le numéro s'affiche en grand sur l'écran éteint ; « + » pour un iPhone à ajouter. */
+const numberOf = (p: Phone) => p.phone_id?.replace(/^phone-/, "") || (p.status === "unknown" ? "+" : "?");
 
 function Battery({ p }: { p: Phone }) {
   if (p.battery === null) return null;
@@ -22,7 +28,7 @@ function Battery({ p }: { p: Phone }) {
 }
 
 /** L'écran : la dernière capture quand l'iPhone répond, sinon son numéro sur fond noir. */
-function Screen({ p, live }: { p: Phone; live: boolean }) {
+export function Screen({ p, live }: { p: Phone; live: boolean }) {
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [p.screen_etag]);
   if (live && p.screen_etag && !broken) {
@@ -45,13 +51,14 @@ function Screen({ p, live }: { p: Phone; live: boolean }) {
 
 const Tile = memo(function Tile({ p, selected, onOpen }: { p: Phone; selected: boolean; onOpen: (udid: string) => void }) {
   const open = reachable(p);
-  // « Jamais branché », « Débranché » se lisent déjà dans l'état : on ne les répète pas en dessous.
-  const problems = p.problems.filter((x) => x.code !== p.status);
+  // « Jamais branché », « Débranché », « À ajouter » se lisent déjà dans l'état : on ne les répète pas en dessous.
+  const problems = p.problems.filter((x) => x.code !== p.status && x.code !== "unknown_phone");
+  const adding = p.status === "unknown";
   const connected = p.status === "ok" || p.status === "attention" || p.status === "unknown";
   const tone = problemTone(p.status);
   const sub =
     [p.model_name, p.ios && `iOS ${p.ios}`, p.owner].filter(Boolean).join(" · ") ||
-    (p.udid ? "Modèle inconnu" : "UDID à renseigner dans devices.yaml");
+    (p.udid ? "Modèle inconnu" : "Place libre : branchez un iPhone pour l'ajouter");
   const body = (
     <>
       <span className="fm-device">
@@ -61,7 +68,7 @@ const Tile = memo(function Tile({ p, selected, onOpen }: { p: Phone; selected: b
       </span>
       <span className="fm-meta">
         <span className="fm-name">
-          {p.phone_id || p.name || "iPhone sans nom"}
+          {p.phone_id || (adding ? "Nouvel iPhone" : p.name) || "iPhone sans nom"}
           {p.session_id && <span className="badge live">Piloté</span>}
         </span>
         <span className="fm-sub">{sub}</span>
@@ -75,12 +82,23 @@ const Tile = memo(function Tile({ p, selected, onOpen }: { p: Phone; selected: b
             {x.message}
           </span>
         ))}
+        {adding && (
+          <span className="fm-cta">
+            L'ajouter à la ferme
+            <Icon icon={ArrowRight01Icon} size={15} />
+          </span>
+        )}
       </span>
     </>
   );
   const cls = `fm-phone ${p.status}${p.session_id ? " piloted" : ""}`;
   return open ? (
-    <button className={cls} onClick={() => onOpen(p.udid!)} aria-current={selected ? "true" : undefined} title="Piloter cet iPhone">
+    <button
+      className={cls}
+      onClick={() => onOpen(p.udid!)}
+      aria-current={selected ? "true" : undefined}
+      title={adding ? "Ajouter cet iPhone à la ferme" : "Piloter cet iPhone"}
+    >
       {body}
     </button>
   ) : (

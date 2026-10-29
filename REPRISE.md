@@ -324,7 +324,7 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [x] Fichiers d'exemple : marque, iPhones, réglages
 - [ ] Démarches plateformes : app TikTok + audit, app Meta, bucket + domaine (attention : les règles de TikTok refusent la
       publication directe « pour ses propres comptes ou ceux de son équipe », voir `docs/strategie/sources.md` §10)
-- [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — validé sur un iPhone 14 Pro Max le 29/10/2026 ; alertes Appium, tunneld et signature de WebDriverAgent (page Ferme, notifications, `farm doctor`, §5 du guide) le 29/10/2026
+- [x] Ferme d'iPhones : détection, santé, alertes, captures en cache, pilotage Appium, dashboard React (`docs/ferme-iphone.md`) — validé sur un iPhone 14 Pro Max le 29/10/2026 ; alertes Appium, tunneld et signature de WebDriverAgent (page Ferme, notifications, `farm doctor`, §5 du guide) le 29/10/2026 ; ajout guidé d'un iPhone depuis la page Ferme (place libre, remplacement d'un iPhone débranché ou nouvelle ligne, écrit dans devices.yaml sans redémarrage, `farm/registry.py`) le 29/10/2026, éprouvé le jour même sur un iPhone 12 mini (iOS 18.3.1) devenu phone-1 ; un échec de WebDriverAgent dit désormais sa cause (certificat à approuver sur l'iPhone, iPhone verrouillé)
 - [x] `engine/` : config, DB (migrations en fichiers), file de tâches durable, coûts et plafonds, CLI
 - [x] `engine/` : formats (catalogue, validation, 4 formats Remotion + 4 formats à plans)
 - [x] Génération LLM : compréhension de l'app (fiche + questions), stratégie (une voix par téléphone), idées validées — démo testée ; clé Claude branchée et acceptée le 29/10/2026, **aucune génération réelle encore**

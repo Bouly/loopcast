@@ -260,11 +260,11 @@ const PHONE_STATE: Record<Phone["status"], string> = {
   ok: "en ligne",
   attention: "à vérifier",
   offline: "hors ligne",
-  unknown: "état inconnu",
+  unknown: "à ajouter à la ferme",
   never_seen: "jamais branché",
 };
 
-const phoneLabel = (p: Phone) => p.phone_id?.replace(/^phone-/, "") || p.name || "?";
+const phoneLabel = (p: Phone) => p.phone_id?.replace(/^phone-/, "") || (p.status === "unknown" ? "+" : p.name || "?");
 
 /** L'écran d'un iPhone en miniature ; une capture qui ne se charge pas laisse l'écran éteint. */
 function Screen({ src }: { src: string }) {
@@ -355,6 +355,16 @@ export function ToFinish({
     items.push({ key: `farm-${f.code}`, to: "/ferme", title: f.message, sub: f.fix, tone: f.level });
   }
   for (const ph of phones) {
+    if (ph.status === "unknown" && ph.udid) {
+      items.push({
+        key: `new-${ph.udid}`,
+        to: `/ferme#${encodeURIComponent(ph.udid)}`,
+        title: "Ajouter le nouvel iPhone à la ferme",
+        sub: [ph.model_name, ph.ios && `iOS ${ph.ios}`].filter(Boolean).join(" · "),
+        tone: "warn",
+      });
+      continue;
+    }
     if (ph.status !== "attention" && ph.status !== "offline") continue;
     const id = ph.phone_id ?? ph.udid ?? ph.name;
     items.push({

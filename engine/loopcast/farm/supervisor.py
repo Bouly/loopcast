@@ -32,7 +32,7 @@ PROBLEMS = {
     "untrusted": "Déverrouiller l'iPhone et appuyer sur « Faire confiance »",
     "devmode_off": "Activer le mode développeur (Réglages › Confidentialité et sécurité)",
     "battery_low": "Batterie faible et pas en charge",
-    "unknown_phone": "iPhone inconnu : l'ajouter dans config/devices.yaml",
+    "unknown_phone": "Nouvel iPhone : l'ajouter à la ferme depuis la page Ferme",
     "offline": "iPhone débranché ou injoignable",
     "probe_error": "Lecture de l'état impossible",
 }
@@ -150,7 +150,7 @@ class Supervisor:
                 emit(dev.udid, "phone_back", f"{label} est de nouveau connecté")
             for code in sorted(set(problems) - prev_problems):
                 emit(dev.udid, f"problem_{code}", f"{label} : {PROBLEMS[code]}")
-            for code in sorted(prev_problems - set(problems) - {"offline"}):
+            for code in sorted(prev_problems - set(problems) - {"offline", "unknown_phone"}):
                 emit(dev.udid, f"resolved_{code}", f"{label} : résolu ({PROBLEMS[code]})")
 
             self.conn.execute(
@@ -193,7 +193,8 @@ class Supervisor:
                     (json.dumps(["offline"]), iso(now), udid),
                 )
                 emit(udid, "phone_gone", f"{label} a été débranché")
-            elif prev["status"] == "offline" and now - datetime.fromisoformat(prev["last_seen"]) >= grace:
+            elif (prev["status"] == "offline" and self.config.phone_by_udid(udid) is not None
+                  and now - datetime.fromisoformat(prev["last_seen"]) >= grace):
                 if not self.conn.execute(
                     "SELECT 1 FROM events WHERE phone_udid=? AND kind='problem_offline' AND at>=?",
                     (udid, prev["last_seen"]),
@@ -262,13 +263,18 @@ class Supervisor:
 
 def list_phones(conn: sqlite3.Connection, config: Config) -> list[dict]:
     """Tous les iPhones : ceux vus au moins une fois + ceux de devices.yaml jamais branchés."""
-    rows = [dict(r) for r in conn.execute("SELECT * FROM phones")]
-    for r in rows:
+    rows = []
+    for r in map(dict, conn.execute("SELECT * FROM phones")):
+        phone = config.phone_by_udid(r["udid"])
+        if phone is None and r["status"] == "offline":
+            continue    # sorti de la ferme (remplacé, retiré de devices.yaml) et débranché : plus rien à en dire
+        # Le nom vient de devices.yaml, pas du dernier passage de l'iPhone : un iPhone remplacé ne garde pas sa place.
+        r["phone_id"] = phone.id if phone else None
         r["problems"] = [{"code": c, "message": PROBLEMS.get(c, c)} for c in json.loads(r["problems"] or "[]")]
         r["model_name"] = model_name(r["model"] or "")
-        phone = config.phone_by_udid(r["udid"])
         r["owner"] = phone.owner if phone else ""
         r["slot"] = phone.slot if phone else None
+        rows.append(r)
     seen_udids = {r["udid"] for r in rows}
     for p in config.phones:
         if p.udid and p.udid in seen_udids:
@@ -277,7 +283,7 @@ def list_phones(conn: sqlite3.Connection, config: Config) -> list[dict]:
             "udid": p.udid, "phone_id": p.id, "name": "", "model": "", "model_name": "", "ios": "", "connection": None,
             "status": "never_seen", "owner": p.owner, "slot": p.slot, "battery": None, "charging": None,
             "session_id": None, "last_seen": None,
-            "problems": [{"code": "never_seen", "message": "Jamais branché" if p.udid else "UDID à renseigner"}],
+            "problems": [{"code": "never_seen", "message": "Jamais branché" if p.udid else "Place libre"}],
         })
     rows.sort(key=lambda r: (r["phone_id"] is None, r["phone_id"] or "", r["name"] or ""))
     return rows

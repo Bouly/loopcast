@@ -1,9 +1,10 @@
-import { Alert02Icon, RefreshIcon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, RefreshIcon, Search01Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityLog } from "../ActivityLog";
 import { api, type Phone } from "../api";
 import { FarmServices } from "../FarmServices";
 import { PhoneDrawer } from "../PhoneDrawer";
+import { PhoneOnboarding } from "../PhoneOnboarding";
 import { PhoneWall } from "../PhoneWall";
 import { Icon } from "../ui";
 import { useFarm } from "../useFarm";
@@ -50,6 +51,24 @@ export function FarmPage() {
   const [query, setQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const { selected, open, close } = useHashSelection(phones);
+  /** L'iPhone en cours d'ajout à la ferme : le parcours reste ouvert même quand il change d'état en route. */
+  const [adding, setAdding] = useState<string | null>(null);
+  const newcomers = phones.filter((p) => p.status === "unknown" && p.udid);
+
+  // Un iPhone pas encore de la ferme s'ouvre sur son ajout, pas sur son pilotage (lien depuis la Validation compris).
+  const openPhone = useCallback(
+    (udid: string) => {
+      if (phones.find((p) => p.udid === udid)?.status === "unknown") setAdding(udid);
+      else open(udid);
+    },
+    [phones, open],
+  );
+  useEffect(() => {
+    if (selected?.status === "unknown" && selected.udid) {
+      setAdding(selected.udid);
+      close();
+    }
+  }, [selected, close]);
 
   const counts = useMemo(
     () => Object.fromEntries(FILTERS.map((f) => [f.key, phones.filter(f.match).length])) as Record<Filter, number>,
@@ -107,6 +126,25 @@ export function FarmPage() {
 
         <FarmServices farm={farm} />
 
+        {newcomers.length > 0 && !adding && (
+          <div className="banner page-banner fm-new" role="status">
+            <Icon icon={SmartPhone01Icon} className="ic-info" />
+            <div>
+              <strong>
+                {newcomers.length > 1 ? `${newcomers.length} nouveaux iPhones branchés` : "Nouvel iPhone branché"}
+              </strong>{" "}
+              <span className="muted">
+                {newcomers.length > 1
+                  ? "ajoutez-les à la ferme pour les piloter."
+                  : `${newcomers[0].model_name || "iPhone"}${newcomers[0].ios ? `, iOS ${newcomers[0].ios}` : ""} : ajoutez-le à la ferme pour le piloter.`}
+              </span>
+            </div>
+            <button className="btn primary sm" onClick={() => setAdding(newcomers[0].udid)}>
+              L'ajouter à la ferme
+            </button>
+          </div>
+        )}
+
         <div className="fm-tools">
           <div className="chips" role="group" aria-label="Filtrer par état">
             {FILTERS.map((f) => (
@@ -133,14 +171,28 @@ export function FarmPage() {
           phones={shown}
           loading={!loaded}
           selected={selected?.udid ?? null}
-          onOpen={open}
+          onOpen={openPhone}
           filtered={filter !== "all" || query.trim() !== ""}
         />
 
         <ActivityLog events={events} />
       </main>
 
-      {selected && <PhoneDrawer key={selected.udid} phone={selected} onClose={close} />}
+      {selected && selected.status !== "unknown" && !adding && (
+        <PhoneDrawer key={selected.udid} phone={selected} onClose={close} />
+      )}
+      {adding && (
+        <PhoneOnboarding
+          key={adding}
+          udid={adding}
+          phone={phones.find((p) => p.udid === adding) ?? null}
+          onClose={() => setAdding(null)}
+          onPilot={(udid) => {
+            setAdding(null);
+            open(udid);
+          }}
+        />
+      )}
     </>
   );
 }
