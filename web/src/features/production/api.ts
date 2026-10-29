@@ -65,7 +65,7 @@ export type Model = {
 
 export type Generator = {
   kind: "video" | "image";
-  mode: string; // fal | fake | absent
+  mode: string; // fal | fake | unavailable (pas de clé, hors démo) | absent
   real: boolean;
   why: string;
   default_quality?: Tier;

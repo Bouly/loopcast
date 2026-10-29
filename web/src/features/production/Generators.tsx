@@ -26,8 +26,9 @@ function Wiring({ status, generators }: { status: Status | null; generators: Gen
     const s = both ? "s" : "";
     if (!g || g.mode === "absent")
       return { tone: "bad" as ProdTone, title: `${label} : non branchée${s}`, why: "Service non configuré sur ce serveur." };
-    const state = g.real ? `réelle${s} (${providerLabel(g.mode)})` : `simulée${s}`;
     const why = capitalize(g.why) + (g.why.endsWith(".") ? "" : ".");
+    if (g.mode === "unavailable") return { tone: "bad" as ProdTone, title: `${label} : indisponible${s}`, why };
+    const state = g.real ? `réelle${s} (${providerLabel(g.mode)})` : `simulée${s}`;
     return { tone: (g.real ? "ok" : "warn") as ProdTone, title: `${label} ${state}`, why };
   };
   const rows = [

@@ -207,6 +207,8 @@ export function providerLabel(id: string): string {
 
 export function generatorState(g: Generator | null | undefined): { short: string; tone: Tone } {
   if (!g || g.mode === "absent") return { short: "absents", tone: "bad" };
+  // Hors démo et sans clé, le serveur refuse de générer (il ne simule pas) : le dire tel quel.
+  if (g.mode === "unavailable") return { short: "indisponibles", tone: "bad" };
   return g.real ? { short: `réels (${providerLabel(g.mode)})`, tone: "ok" } : { short: "simulés", tone: "warn" };
 }
 
