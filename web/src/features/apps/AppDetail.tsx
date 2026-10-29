@@ -368,7 +368,7 @@ function AppDetail({ id }: { id: string }) {
             <div className="actions ax-head-actions">
               <button type="button" className="btn" onClick={() => setEditing(true)}>
                 <Icon icon={PencilEdit02Icon} />
-                Modifier
+                Modifier l'app
               </button>
               {(app.status === "active" || app.status === "strategy_ready") && (
                 <button type="button" className="btn" onClick={pause} disabled={busy !== null}>
