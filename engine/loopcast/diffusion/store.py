@@ -123,6 +123,7 @@ class Post:
     url: str | None
     log: list[dict] = field(default_factory=list)
     format: str | None = None
+    hook: str | None = None                       # l'accroche de l'idée : le titre de la vidéo à l'écran
 
     @classmethod
     def from_row(cls, r: sqlite3.Row) -> "Post":
@@ -131,12 +132,12 @@ class Post:
                    parse_dt(r["scheduled_at"]), parse_dt(r["planned_at"]), int(r["attempts"] or 0), r["external_id"],
                    parse_dt(r["posted_at"]), r["views"], r["likes"], parse_dt(r["metrics_at"]),
                    parse_dt(r["winner_at"]), r["channel"], r["url"], read_log(r["log"]),
-                   r["format"] if "format" in keys else None)
+                   r["format"] if "format" in keys else None, r["hook"] if "hook" in keys else None)
 
     def to_dict(self) -> dict:
         return {
             "id": self.id, "content_id": self.content_id, "account_id": self.account_id, "platform": self.platform,
-            "app_id": self.app_id, "status": self.status, "format": self.format,
+            "app_id": self.app_id, "status": self.status, "format": self.format, "hook": self.hook,
             "scheduled_at": iso(self.scheduled_at) if self.scheduled_at else None,
             "planned_at": iso(self.planned_at) if self.planned_at else None,
             "attempts": self.attempts, "external_id": self.external_id, "url": self.url, "channel": self.channel,
@@ -146,7 +147,8 @@ class Post:
         }
 
 
-POST_SELECT = "SELECT p.*, c.format AS format FROM posts p LEFT JOIN content c ON c.id = p.content_id"
+POST_SELECT = ("SELECT p.*, c.format AS format, (SELECT i.hook FROM ideas i WHERE i.id = c.idea_id) AS hook "
+               "FROM posts p LEFT JOIN content c ON c.id = p.content_id")
 
 
 def read_log(raw: str | None) -> list[dict]:

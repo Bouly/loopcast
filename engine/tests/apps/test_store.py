@@ -139,3 +139,21 @@ def test_analysis_needs_something_to_read(aconn, cfg, clock):
     aconn.execute("UPDATE jobs SET status='dead' WHERE id=?", (first,))
     assert store.request_analysis(aconn, "vide", now=clock()) == first
     assert job_row(aconn, "apps.analyze:vide:1")["status"] == "queued"
+
+
+def test_overview_counts_what_waits_for_the_team_downstream(aconn, cfg, clock):
+    """La liste des apps doit voir les idées à relire et les vidéos à valider, pas seulement les questions."""
+    store.create_app(aconn, cfg, now=clock(), name="Habitudo")
+    for idea_id, status in (("i1", "proposed"), ("i2", "proposed"), ("i3", "producing")):
+        aconn.execute("""INSERT INTO ideas(id, app_id, phone_id, lang, format, hook, idea, status, created_at)
+                         VALUES (?,?,?,?,?,?,?,?,?)""",
+                      (idea_id, "habitudo", "phone-1", "fr", "hook-demo", idea_id, "{}", status,
+                       "2026-10-29T08:00:00+00:00"))
+    for content_id, app_id, status, qa in (("c1", "habitudo", "rendered", {"ok": True}),
+                                           ("c2", "habitudo", "rendered", None),      # pas encore contrôlée
+                                           ("c3", "habitudo", "approved", {"ok": True}),
+                                           ("c4", "autre", "rendered", {"ok": True})):
+        aconn.execute("INSERT INTO content(id, app_id, format, lang, status, qa) VALUES (?,?,?,?,?,?)",
+                      (content_id, app_id, "hook-demo", "fr", status, json.dumps(qa) if qa else None))
+    counts = store.app_overview(aconn, "habitudo")["counts"]
+    assert counts["ideas_proposed"] == 2 and counts["to_review"] == 1

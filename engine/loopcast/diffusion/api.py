@@ -92,7 +92,8 @@ def _account_view(conn, account: accounts.Account, s: DiffusionSettings, now, pu
         "paused_reason": st.paused_reason if paused else None,
         "stale": st is None or st.day != today.isoformat(),
         "today": {"date": today.isoformat(), **{k: counts.get(k, 0) for k in POST_STATUSES}},
-        "stock": len(planner.candidates(conn, account)),
+        "stock": len(planner.candidates(conn, account)),       # prêtes à publier
+        "to_review": planner.to_review(conn, account),          # à valider d'abord
         "recent": [_post_view(conn, p, s) for p in recent],
     }
 

@@ -390,6 +390,30 @@ def list_ideas(conn: sqlite3.Connection, *, app_id: str | None = None, phone_id:
     return [_idea_row(r) for r in conn.execute(sql, args)]
 
 
+def idea_videos(conn: sqlite3.Connection, idea_ids: list[str]) -> dict[str, dict]:
+    """La vidéo de chaque idée et ses posts (hors annulés) : de l'idée, l'écran mène à la vidéo puis au post.
+    `to_review` : rendue, contrôle qualité réussi, pas encore décidée (le « à valider » de la validation)."""
+    out: dict[str, dict] = {}
+    for start in range(0, len(idea_ids), 400):                  # limite de paramètres de SQLite
+        chunk = idea_ids[start:start + 400]
+        marks = ",".join("?" * len(chunk))
+        for r in conn.execute(
+                f"""SELECT id, idea_id, status, (status = 'rendered' AND json_extract(qa, '$.ok') = 1) AS to_review
+                    FROM content WHERE idea_id IN ({marks}) ORDER BY created_at""", chunk):
+            out[r["idea_id"]] = {"id": r["id"], "status": r["status"], "to_review": bool(r["to_review"]),
+                                 "posts": []}
+    by_content = {v["id"]: v for v in out.values()}
+    for start in range(0, len(by_content), 400):
+        chunk = list(by_content)[start:start + 400]
+        marks = ",".join("?" * len(chunk))
+        for p in conn.execute(
+                f"""SELECT id, content_id, account_id, platform, status, scheduled_at, posted_at FROM posts
+                    WHERE content_id IN ({marks}) AND status != 'skipped'
+                    ORDER BY COALESCE(posted_at, scheduled_at), id""", chunk):
+            by_content[p["content_id"]]["posts"].append({k: p[k] for k in p.keys() if k != "content_id"})
+    return out
+
+
 def recent_hooks(conn: sqlite3.Connection, app_id: str, *, limit: int = DUP_WINDOW,
                  lang: str | None = None) -> list[str]:
     """Les accroches les plus récentes de l'app (toutes idées, rejetées comprises), pour l'anti-doublon."""
@@ -530,27 +554,38 @@ def phone_history(conn: sqlite3.Connection, app_id: str, phone_id: str, limit: i
 
 def phone_stock(conn: sqlite3.Connection, app_id: str, phone_id: str) -> dict:
     """Ce qui attend d'être publié pour ce téléphone : idées en cours, contenus prêts ou en préparation non
-    publiés, et idées déjà commandées (tâches ideas.generate en attente)."""
+    publiés, et idées déjà commandées (tâches ideas.generate en attente).
+
+    Le détail, avec les mots de l'écran : `proposed` idées à relire, `producing` vidéos en production (idées
+    approuvées ou en cours de rendu), `to_review` vidéos à valider (rendues, contrôle qualité réussi, pas encore
+    décidées), `ready` vidéos prêtes à publier (validées, pas encore publiées)."""
     accs = [f"{phone_id}:{p}" for p in accounts.PLATFORMS]
     ideas_q = ",".join("?" * len(IDEAS_IN_PROGRESS))
-    ideas_n = conn.execute(f"SELECT COUNT(*) FROM ideas WHERE app_id=? AND phone_id=? AND status IN ({ideas_q})",
-                           (app_id, phone_id, *IDEAS_IN_PROGRESS)).fetchone()[0]
+    ideas_n, proposed_n = conn.execute(
+        f"""SELECT COUNT(*), COALESCE(SUM(status = 'proposed'), 0) FROM ideas
+            WHERE app_id=? AND phone_id=? AND status IN ({ideas_q})""",
+        (app_id, phone_id, *IDEAS_IN_PROGRESS)).fetchone()
     content_q = ",".join("?" * len(CONTENT_IN_STOCK))
     posts_q = ",".join("?" * len(POST_CONSUMED))
-    content_n = conn.execute(
-        f"""SELECT COUNT(*) FROM content c
+    content_n, review_n, ready_n = conn.execute(
+        f"""SELECT COUNT(*),
+                   COALESCE(SUM(c.status = 'rendered' AND json_extract(c.qa, '$.ok') = 1), 0),
+                   COALESCE(SUM(c.status = 'approved'), 0)
+            FROM content c
             WHERE c.app_id=? AND c.status IN ({content_q})
               AND (c.account_id IN (?,?) OR c.idea_id IN (SELECT id FROM ideas WHERE app_id=? AND phone_id=?))
               AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.content_id=c.id AND p.status IN ({posts_q}))
               AND NOT EXISTS (SELECT 1 FROM ideas i WHERE i.id=c.idea_id AND i.status IN ({ideas_q}))""",
-        (app_id, *CONTENT_IN_STOCK, *accs, app_id, phone_id, *POST_CONSUMED, *IDEAS_IN_PROGRESS)).fetchone()[0]
+        (app_id, *CONTENT_IN_STOCK, *accs, app_id, phone_id, *POST_CONSUMED, *IDEAS_IN_PROGRESS)).fetchone()
     pending_n = conn.execute(
         """SELECT COALESCE(SUM(CAST(json_extract(payload, '$.count') AS INTEGER)), 0) FROM jobs
            WHERE kind='ideas.generate' AND status IN ('queued','running')
              AND json_extract(payload, '$.app_id')=? AND json_extract(payload, '$.phone_id')=?""",
         (app_id, phone_id)).fetchone()[0]
     return {"ideas": ideas_n, "content": content_n, "pending": pending_n,
-            "total": ideas_n + content_n + pending_n}
+            "total": ideas_n + content_n + pending_n,
+            "proposed": proposed_n, "producing": ideas_n - proposed_n + content_n - review_n - ready_n,
+            "to_review": review_n, "ready": ready_n}
 
 
 # --- Contenus et performances -------------------------------------------------------------------------------

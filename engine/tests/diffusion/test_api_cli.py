@@ -60,6 +60,24 @@ def test_posts_to_finish_and_team_actions(api, conn, clock, add_content, add_pos
     assert "diffusion.posted" in kinds
 
 
+def test_posts_carry_the_hook_and_accounts_count_videos_to_review(api, conn, clock, add_content, add_post):
+    """Le calendrier nomme une vidéo par son accroche, et dit ce qui attend la validation quand le stock est vide."""
+    add_content("c1", idea_phone="phone-1")
+    pid = add_post("c1", "phone-1:tiktok", clock() - timedelta(hours=1), status="needs_human")
+    assert api.get("/api/diffusion/posts", params={"status": "needs_human"}).json()[0]["hook"] == "accroche"
+    posts = api.get("/api/diffusion/accounts/phone-1:tiktok").json()["posts"]
+    assert [(p["id"], p["hook"]) for p in posts] == [(pid, "accroche")]
+
+    add_content("r1", status="rendered")                       # à valider pour phone-1
+    add_content("r2", status="rendered", phone=None)           # à valider, pour n'importe quel téléphone
+    add_content("r3", status="rendered", phone="phone-2")      # la voix d'un autre téléphone
+    add_content("r4", status="rendered")                       # rendue, contrôle pas encore passé
+    conn.execute("UPDATE content SET qa='{\"ok\": true}' WHERE id IN ('r1', 'r2', 'r3')")
+    accounts = {a["id"]: a for a in api.get("/api/diffusion/accounts").json()}
+    assert (accounts["phone-1:tiktok"]["to_review"], accounts["phone-1:tiktok"]["stock"]) == (2, 0)
+    assert accounts["phone-1:instagram"]["to_review"] == 2
+
+
 def test_pause_and_resume(api, conn, add_content):
     for i in range(3):
         add_content(f"c{i}")

@@ -229,6 +229,23 @@ def candidates(conn: sqlite3.Connection, account: Account, *, day_start: datetim
     return out
 
 
+def to_review(conn: sqlite3.Connection, account: Account) -> int:
+    """Les vidéos que ce compte pourra publier une fois validées : rendues, contrôle qualité réussi, pas encore
+    décidées (même règle de téléphone que `candidates`). Quand le stock est vide, c'est souvent là qu'elles sont."""
+    if not account.app_id:
+        return 0
+    rows = conn.execute(
+        """SELECT COALESCE(c.account_id, i.account_id) AS target,
+                  CASE WHEN json_valid(i.idea) THEN json_extract(i.idea, '$.phone_id') END AS idea_phone
+           FROM content c LEFT JOIN ideas i ON i.id = c.idea_id
+           WHERE c.status = 'rendered' AND json_extract(c.qa, '$.ok') = 1
+             AND COALESCE(c.app_id, c.brand) = ? AND c.lang = ?""",
+        (account.app_id, account.lang),
+    ).fetchall()
+    phones = [(r["target"] or "").split(":")[0] or r["idea_phone"] or None for r in rows]
+    return sum(1 for phone in phones if phone is None or phone == account.device)
+
+
 def create_post(conn: sqlite3.Connection, account: Account, content_id: str, when: datetime, now: datetime,
                 message: str) -> int | None:
     """Crée le post (ou reprend la ligne « skipped » ou « dry_run » du même contenu sur cette plateforme).

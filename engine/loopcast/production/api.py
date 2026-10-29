@@ -68,7 +68,7 @@ def _changed(request: Request, row) -> dict:
 @router.get("")
 def list_content(request: Request, app_id: str | None = None, status: str | None = None,
                  account_id: str | None = None, format: str | None = None, limit: int = 50, offset: int = 0):
-    sql, args = "SELECT * FROM content WHERE 1=1", []
+    sql, args = f"{store.WITH_HOOK} WHERE 1=1", []
     if status == "review":
         sql += " AND status='rendered' AND json_extract(qa, '$.ok') = 1"
     elif status:
@@ -130,6 +130,11 @@ def detail(content_id: str, request: Request):
     out["events"] = [dict(e) for e in conn.execute(
         "SELECT at, kind, message FROM events WHERE kind LIKE 'content.%' AND substr(message, 1, ?) = ? "
         "ORDER BY id DESC LIMIT 30", (len(prefix), prefix))]
+    # Où la vidéo part (ou est partie) : le lien de la validation vers le calendrier.
+    out["posts"] = [dict(p) for p in conn.execute(
+        """SELECT id, account_id, platform, status, scheduled_at, posted_at FROM posts
+           WHERE content_id=? AND status != 'skipped' ORDER BY COALESCE(posted_at, scheduled_at), id""",
+        (content_id,))]
     return out
 
 

@@ -81,6 +81,25 @@ def test_detail(api, pipe):
     assert api.get("/api/content/inconnu").status_code == 404
 
 
+def test_list_and_detail_name_the_video_by_its_hook_and_say_where_it_goes(api, pipe):
+    """Un seul titre partout (l'accroche de l'idée), et de la vidéo on remonte à son post du calendrier."""
+    add_content(pipe, "c-review", "rendered", qa_ok=True)
+    pipe.conn.execute("UPDATE ideas SET hook='Ta routine du soir en 3 minutes' WHERE id='c-review'")
+    pipe.conn.execute("INSERT INTO content(id, app_id, format, lang, status) VALUES ('sans-idee', 'habitudo', "
+                      "'notes-app', 'fr', 'approved')")
+    by_id = {c["id"]: c for c in api.get("/api/content").json()}
+    assert by_id["c-review"]["hook"] == "Ta routine du soir en 3 minutes" and by_id["sans-idee"]["hook"] is None
+    assert api.get("/api/content?status=review").json()[0]["hook"] == "Ta routine du soir en 3 minutes"
+
+    add_content(pipe, "c-kept", "approved", qa_ok=True)
+    pipe.conn.execute("""INSERT INTO posts(content_id, account_id, platform, status, scheduled_at)
+                         VALUES ('c-kept', 'phone-1:tiktok', 'tiktok', 'scheduled', '2026-10-30T11:00:00+00:00')""")
+    d = api.get("/api/content/c-kept").json()
+    assert d["hook"] == "Arrête de compter sur ta motivation"
+    assert [(p["account_id"], p["status"]) for p in d["posts"]] == [("phone-1:tiktok", "scheduled")]
+    assert api.post("/api/content/c-review/approve").json()["hook"] == "Ta routine du soir en 3 minutes"
+
+
 def test_detail_shows_generations(api, pipe):
     idea_id = pipe.idea("ai-hook-demo", shots=story_shots(pipe.screenshot("a.png"), pipe.screenshot("b.png")))
     pipe.produce(idea_id)

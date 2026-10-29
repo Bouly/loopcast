@@ -180,3 +180,27 @@ def test_ideas_list_detail_approve_reject(env, clock):
     assert client.post(f"/api/strategy/ideas/{c}/reject").status_code == 409       # déjà en production
     assert client.post(f"/api/strategy/ideas/{c}/approve").status_code == 409
     assert client.post("/api/strategy/ideas/nope/approve").status_code == 404
+
+
+def test_ideas_list_leads_to_the_video_and_its_posts(env, clock):
+    """Une idée produite mène à sa vidéo (à valider ou décidée) puis à son post du calendrier."""
+    client, conn, _bus = env
+    rec = _draft(conn, clock)
+    phone1 = type("P", (), {"id": "phone-1", "accounts": {"tiktok": {}}})()
+    with store.transaction(conn):
+        review, kept, waiting = store.insert_ideas(
+            conn, app_id=APP, strategy_id=rec.id, phone=phone1, status="produced", now=clock(), job_id=None,
+            ideas=[make_idea(), make_idea("Ta to-do déborde ?", fmt="notes-app"), make_idea("Trois habitudes")])
+    for content_id, status in ((review, "rendered"), (kept, "approved")):
+        conn.execute("INSERT INTO content(id, app_id, idea_id, format, lang, status, qa, created_at) "
+                     "VALUES (?,?,?,?,?,?,?,?)", (content_id, APP, content_id, "hook-demo", "fr", status,
+                                                  json.dumps({"ok": True}), "2026-10-29T08:00:00+00:00"))
+    conn.execute("""INSERT INTO posts(content_id, account_id, platform, status, scheduled_at) VALUES
+                    (?, 'phone-1:tiktok', 'tiktok', 'scheduled', '2026-10-30T11:00:00+00:00'),
+                    (?, 'phone-1:instagram', 'instagram', 'skipped', '2026-10-30T12:00:00+00:00')""", (kept, kept))
+
+    videos = {i["id"]: i["video"] for i in client.get("/api/strategy/ideas", params={"app_id": APP}).json()}
+    assert videos[review]["to_review"] is True and videos[review]["posts"] == []
+    assert videos[kept]["status"] == "approved" and videos[kept]["to_review"] is False
+    assert [(p["account_id"], p["status"]) for p in videos[kept]["posts"]] == [("phone-1:tiktok", "scheduled")]
+    assert videos[waiting] is None
