@@ -269,7 +269,7 @@
   line-height: 1;
   color: var(--muted-foreground);
 }
-.btn.primary .rv-kbd, .rv-toast .rv-kbd {
+.btn.primary .rv-kbd {
   background: transparent;
   border-color: color-mix(in srgb, var(--brand-foreground) 30%, transparent);
   color: var(--rv-on-dark-muted, var(--brand-foreground));
@@ -463,6 +463,12 @@
 /* ---------- Décisions récentes ---------- */
 
 .thead.rv-hrow, .row.rv-hrow { grid-template-columns: minmax(220px, 2.4fr) minmax(170px, 1.4fr) 130px 32px; }
+/* Une liste de boutons (pas un tableau) : chaque ligne garde sa sémantique de bouton. */
+.rv-hlist { list-style: none; margin: 0; padding: 0; }
+.rv-hlist .row { border-bottom: 0; }
+.rv-hlist > li + li { border-top: 1px solid var(--border); }
+.row.rv-hrow[aria-current="true"] { background: var(--brand-bg); }
+.row.rv-hrow[aria-current="true"] .chev { opacity: 1; }
 .mini.rv-mini { width: 36px; height: 64px; }
 .rv-ellipsis, .who .name.rv-ellipsis { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rv-hstate { display: grid; gap: 2px; min-width: 0; }
@@ -486,70 +492,16 @@
 .rv-decision .rv-reject-anchor { margin-left: auto; }
 .rv-note-quote { flex-basis: 100%; margin: 0; color: var(--muted-foreground); overflow-wrap: anywhere; }
 
-/* ---------- Notifications : en bas au centre, sombres ---------- */
+/* Publication : où part la vidéo, chaque post mène au calendrier */
+.rv-posts { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rv-posts li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; }
+.state.rv-post-state { font-size: 13px; }
+.rv-post-link { margin-left: auto; }
 
-.rv-toasts {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  z-index: 40;
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-.rv-toast {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  max-width: 560px;
-  padding: 6px 6px 6px 14px;
-  border-radius: var(--r-lg);
-  background: var(--foreground);
-  color: var(--brand-foreground);
-  box-shadow: var(--pop-shadow);
-  font-size: 13px;
-  font-weight: 500;
-  pointer-events: auto;
-  animation: rv-toast-in 160ms var(--ease);
-  --rv-on-dark-muted: color-mix(in srgb, var(--brand-foreground) 72%, transparent);
-}
-@keyframes rv-toast-in { from { opacity: 0; transform: translateY(6px); } }
-.rv-toast-ic { flex: none; }
-.rv-toast.done .rv-toast-ic { color: var(--ok-border); }
-.rv-toast.error .rv-toast-ic { color: var(--destructive-border); }
-.rv-toast.info .rv-toast-ic { color: var(--info-border); }
-.rv-toast-msg { padding: 4px 0; line-height: 1.4; overflow-wrap: anywhere; }
-.rv-toast-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--r-md);
-  background: transparent;
-  color: var(--brand-foreground);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 120ms var(--ease);
-}
-.rv-toast-btn:hover { background: color-mix(in srgb, var(--brand-foreground) 12%, transparent); }
-.rv-toast-btn:focus-visible { outline: 2px solid var(--brand-foreground); outline-offset: 1px; }
-.rv-toast-btn.icon { width: 28px; padding: 0; justify-content: center; }
-
-/* ---------- Écrans tactiles : pas de raccourcis affichés, zones de doigt agrandies, pas de zoom iOS ---------- */
+/* ---------- Écrans tactiles : pas de raccourcis affichés (zones de 44 px et champs à 16 px : styles.css) ---------- */
 
 @media (hover: none), (pointer: coarse) {
   .rv-kbd, .rv-keys { display: none; }
-  .rv-ov-btn::after { content: ""; position: absolute; inset: -6px; }
-  .rv-note .field, .rv-editor .field { font-size: 16px; }
 }
 
 /* ---------- Écrans étroits ---------- */
@@ -600,7 +552,8 @@
     animation: rv-sheet 190ms var(--ease);
   }
   .rv-reason { height: 36px; }
-  .rv-toasts { bottom: calc(72px + env(safe-area-inset-bottom)); }
+  /* Les notifications passent au-dessus de la barre de décision */
+  body:has(.rv-decide) .toasts { bottom: calc(72px + env(safe-area-inset-bottom)); }
   .rv-panel { padding: 16px; }
   .facts.rv-facts { grid-template-columns: 116px minmax(0, 1fr); }
   .facts.rv-facts dt { padding-right: 10px; }

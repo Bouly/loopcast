@@ -1,5 +1,5 @@
-import { Alert02Icon, AlertCircleIcon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Alert02Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "../../ui";
 import type { Job } from "./api";
 import { appOf, subject, type ProdTone } from "./labels";
@@ -115,35 +115,3 @@ export function useNow(intervalMs: number, sync: unknown): number {
   return now;
 }
 
-export type ToastMessage = { id: number; text: string; tone: "ok" | "bad" };
-
-/** Notification après un geste : en bas au centre, sombre, 3,5 s (doctrine). */
-export function useToast() {
-  const [toast, setToast] = useState<ToastMessage | null>(null);
-  const timer = useRef<number | null>(null);
-  const show = useCallback((text: string, tone: ToastMessage["tone"] = "ok") => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    setToast({ id: Date.now(), text, tone });
-    timer.current = window.setTimeout(() => setToast(null), 3500);
-  }, []);
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    },
-    [],
-  );
-  return { toast, show };
-}
-
-export function Toast({ toast }: { toast: ToastMessage | null }) {
-  return (
-    <div className="prod-toast-region" role="status" aria-live="polite">
-      {toast && (
-        <div className="prod-toast" key={toast.id}>
-          <Icon icon={toast.tone === "ok" ? CheckmarkCircle02Icon : AlertCircleIcon} className={`prod-toast-ic ${toast.tone}`} />
-          <span>{toast.text}</span>
-        </div>
-      )}
-    </div>
-  );
-}

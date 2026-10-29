@@ -298,6 +298,10 @@ def app_overview(conn: sqlite3.Connection, app_id: str) -> dict:
         "sources_pending": count("SELECT COUNT(*) FROM app_sources WHERE app_id=? AND status='pending'"),
         "sources_error": count("SELECT COUNT(*) FROM app_sources WHERE app_id=? AND status='error'"),
         "questions_open": count("SELECT COUNT(*) FROM app_questions WHERE app_id=? AND status='open'"),
+        # Ce qui attend l'équipe plus loin dans le parcours : idées à relire, vidéos à valider.
+        "ideas_proposed": count("SELECT COUNT(*) FROM ideas WHERE app_id=? AND status='proposed'"),
+        "to_review": count("SELECT COUNT(*) FROM content WHERE app_id=? AND status='rendered' "
+                           "AND json_extract(qa, '$.ok') = 1"),
     }
     latest = latest_brief(conn, app_id)
     approved = latest_brief(conn, app_id, approved=True)

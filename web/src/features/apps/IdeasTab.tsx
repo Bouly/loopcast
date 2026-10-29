@@ -1,8 +1,11 @@
 import { ArrowDown01Icon, Idea01Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
-import { dateTime } from "../../format";
+import { agoInSentence, relative } from "../../format";
+import { calendarLink, platformName, validationLink } from "../../links";
+import { Link } from "../../router";
 import { Icon } from "../../ui";
-import { sentence, strategyApi, type IdeaRow, type IdeaStatus, type Job, type PhoneStock } from "./api";
+import { POST_STATE } from "../calendar/model";
+import { sentence, strategyApi, type IdeaRow, type IdeaStatus, type IdeaVideo, type Job, type PhoneStock, type VideoPost } from "./api";
 import type { TabProps } from "./AppDetail";
 import { STRATEGY_KEYS, useFormats } from "./data";
 import { cleanError, LANG_LABEL, LANG_NAME, NNBSP, clock, int, plural } from "./format";
@@ -18,14 +21,49 @@ const STATUS: Record<IdeaStatus, { label: string; tone: Tone }> = {
   failed: { label: "En échec", tone: "bad" },
 };
 
-type StatusFilter = "proposed" | "approved" | "production" | "rejected" | "all";
+/** L'état d'une idée produite est celui de sa vidéo, avec les mots de la validation et du calendrier. */
+function ideaState(row: IdeaRow): { label: string; tone: Tone } {
+  const v = row.video;
+  if (row.status === "produced" && v) {
+    if (v.to_review) return { label: "Vidéo à valider", tone: "warn" };
+    if (v.status === "approved") {
+      return v.posts.some((p) => p.status === "posted")
+        ? { label: "Publiée", tone: "ok" }
+        : { label: "Prête à publier", tone: "ok" };
+    }
+  }
+  return STATUS[row.status] ?? { label: row.status, tone: "idle" };
+}
+
+type StatusFilter = "proposed" | "approved" | "production" | "produced" | "rejected" | "failed" | "all";
+/** « En production » ne compte que ce qui se fabrique en ce moment ; une vidéo faite est « produite ». */
 const FILTERS: { key: StatusFilter; label: string; match: (s: IdeaStatus) => boolean }[] = [
   { key: "proposed", label: "À relire", match: (s) => s === "proposed" },
   { key: "approved", label: "Approuvées", match: (s) => s === "approved" },
-  { key: "production", label: "En production", match: (s) => s === "producing" || s === "produced" || s === "failed" },
+  { key: "production", label: "En production", match: (s) => s === "producing" },
+  { key: "produced", label: "Produites", match: (s) => s === "produced" },
   { key: "rejected", label: "Rejetées", match: (s) => s === "rejected" },
+  { key: "failed", label: "En échec", match: (s) => s === "failed" },
   { key: "all", label: "Toutes", match: () => true },
 ];
+/** Toujours visibles ; les autres filtres n'apparaissent que s'ils ont des idées (ou s'ils sont choisis). */
+const ALWAYS: StatusFilter[] = ["proposed", "all"];
+
+/** Les champs d'un format, en français (props Remotion : engine/loopcast/formats.py). */
+const PROP_LABELS: Record<string, string> = {
+  hook: "Accroche",
+  screens: "Écrans",
+  cta: "Appel à l'action",
+  title: "Titre",
+  items: "Liste",
+  contactName: "Contact",
+  messages: "Messages",
+  slides: "Slides",
+  caption: "Légende",
+  body: "Texte",
+};
+/** Des réglages de rendu, pas du contenu : jamais affichés. */
+const HIDDEN_KEYS = new Set(["asset_id", "kind", "src", "bg", "music", "lang", "brand"]);
 
 const SHOT_KIND: Record<string, string> = {
   ai_video: "Vidéo IA",
@@ -47,24 +85,25 @@ function PropsView({ json }: { json: string }) {
   if (!props || typeof props !== "object") return null;
   const show = (v: unknown): string => {
     if (v == null) return "";
-    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+    if (typeof v === "boolean") return ""; // un réglage d'écran factice (case cochée…), pas du texte
+    if (typeof v === "string" || typeof v === "number") return String(v);
     if (Array.isArray(v)) return v.map(show).filter(Boolean).join(" / ");
     if (typeof v === "object") {
       const o = v as Record<string, unknown>;
       if ("text" in o) return `${o.from ? `${o.from === "me" ? "Moi" : "Ami"} : ` : ""}${show(o.text)}`;
       const shot = "asset_id" in o && o.asset_id != null ? ` (capture n° ${o.asset_id})` : "";
-      const rest = Object.entries(o).filter(([k]) => k !== "asset_id").map(([, x]) => show(x)).filter(Boolean);
+      const rest = Object.entries(o).filter(([k]) => !HIDDEN_KEYS.has(k)).map(([, x]) => show(x)).filter(Boolean);
       return rest.join(", ") + shot;
     }
     return "";
   };
-  const entries = Object.entries(props).filter(([, v]) => typeof v !== "boolean" && show(v));
+  const entries = Object.entries(props).filter(([k, v]) => !HIDDEN_KEYS.has(k) && typeof v !== "boolean" && show(v));
   if (!entries.length) return null;
   return (
     <dl className="facts ax-facts ax-props">
       {entries.map(([k, v]) => (
         <div key={k} className="ax-contents">
-          <dt className="mono">{k}</dt>
+          <dt className={PROP_LABELS[k] ? undefined : "mono"}>{PROP_LABELS[k] ?? k}</dt>
           <dd>
             {Array.isArray(v) ? (
               <ul className="ax-list">
@@ -96,7 +135,7 @@ function IdeaItem({
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const idea = row.idea;
-  const status = STATUS[row.status] ?? { label: row.status, tone: "idle" as Tone };
+  const status = ideaState(row);
   const canApprove = row.status === "proposed" || row.status === "rejected";
   const canReject = row.status === "proposed" || row.status === "approved";
 
@@ -125,7 +164,7 @@ function IdeaItem({
           </span>
           <span className="ax-idea-meta muted">
             {formatTitle(row.format)}, {row.pillar || "sans pilier"}, {row.phone_id ?? "?"} en {LANG_NAME[row.lang]?.toLowerCase()},{" "}
-            {dateTime(row.created_at)}
+            {agoInSentence(row.created_at)}
           </span>
         </span>
         <span className="ax-idea-state">
@@ -150,7 +189,11 @@ function IdeaItem({
           {row.parent_id && (
             <>
               <dt>Variation de</dt>
-              <dd className="mono">{row.parent_id}</dd>
+              <dd>
+                <Link className="ax-link" to={validationLink({ decided: true, video: row.parent_id })}>
+                  La vidéo qui a marché
+                </Link>
+              </dd>
             </>
           )}
         </dl>
@@ -173,6 +216,8 @@ function IdeaItem({
           </div>
         )}
         {!idea.shots?.length && <PropsView json={idea.props_json} />}
+
+        {row.video && <VideoLinks row={row} video={row.video} />}
 
         {row.status === "rejected" && row.review_note && (
           <p className="ax-review-note">
@@ -238,6 +283,58 @@ function IdeaItem({
   );
 }
 
+/** Un post de la vidéo, en une ligne : « TikTok : prévu dans 5 h », « Instagram : publié il y a 2 h ». */
+function postLine(p: VideoPost): string {
+  const when = p.posted_at ?? p.scheduled_at;
+  const time = when ? relative(when) : "";
+  const where = platformName(p.platform);
+  if (p.status === "posted") return `${where} : publié ${time}`.trim();
+  if (p.status === "scheduled") return `${where} : prévu ${time}`.trim();
+  const label = (POST_STATE[p.status as keyof typeof POST_STATE]?.label ?? p.status).toLowerCase();
+  return `${where} : ${label}${time ? `, prévu ${time}` : ""}`;
+}
+
+/** De l'idée à sa vidéo (validation), puis à ses posts (calendrier). */
+function VideoLinks({ row, video }: { row: IdeaRow; video: IdeaVideo }) {
+  const decided = video.status === "approved" || video.status === "rejected";
+  if (!video.to_review && !decided) return null; // encore en production : rien à ouvrir
+  const text = video.to_review
+    ? "Vidéo à valider : rendue, contrôle qualité réussi."
+    : video.status === "approved"
+      ? video.posts.some((p) => p.status === "posted")
+        ? "Vidéo validée et publiée."
+        : "Vidéo validée, prête à publier."
+      : "Vidéo jetée à la validation.";
+  return (
+    <div className="ax-video">
+      <h4 className="ax-label">Vidéo</h4>
+      <ul className="ax-video-list">
+        <li>
+          <span>{text}</span>
+          <Link
+            className="btn sm"
+            to={
+              video.to_review
+                ? validationLink({ app: row.app_id, phone: row.phone_id, video: video.id })
+                : validationLink({ decided: true, video: video.id })
+            }
+          >
+            {video.to_review ? "Valider la vidéo" : "Voir la vidéo"}
+          </Link>
+        </li>
+        {video.posts.map((p) => (
+          <li key={p.id}>
+            <span>{postLine(p)}</span>
+            <Link className="btn ghost sm" to={calendarLink(p.account_id, p.id)}>
+              Voir dans le calendrier
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function StockRow({ appId, p, target, failed, onChanged }: { appId: string; p: PhoneStock; target: number; failed: Job | undefined; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const generate = async () => {
@@ -247,12 +344,24 @@ function StockRow({ appId, p, target, failed, onChanged }: { appId: string; p: P
       toast(`${plural(r.count, "idée demandée", "idées demandées")} pour ${p.phone_id}`);
       onChanged();
     } catch (e) {
-      toast((e as Error).message);
+      toast((e as Error).message, { tone: "error" });
     } finally {
       setBusy(false);
     }
   };
   const low = p.total < target;
+  // Le détail du stock, avec les mots de la validation : « à valider » n'est pas encore « prête à publier ».
+  const parts = [
+    p.proposed > 0 && plural(p.proposed, "idée à relire", "idées à relire"),
+    p.producing > 0 && plural(p.producing, "vidéo en production", "vidéos en production"),
+    p.to_review > 0 && (
+      <Link key="review" className="ax-link" to={validationLink({ app: appId, phone: p.phone_id })}>
+        {plural(p.to_review, "vidéo à valider", "vidéos à valider")}
+      </Link>
+    ),
+    p.ready > 0 ? plural(p.ready, "vidéo prête à publier", "vidéos prêtes à publier") : "aucune vidéo prête à publier",
+    p.pending > 0 && plural(p.pending, "idée commandée", "idées commandées"),
+  ].filter(Boolean);
   return (
     <li className="ax-stock">
       <div className="ax-stock-who">
@@ -269,9 +378,13 @@ function StockRow({ appId, p, target, failed, onChanged }: { appId: string; p: P
             {int(target)}
           </span>
         </span>
-        <span className="muted">
-          {plural(p.ideas, "idée en cours", "idées en cours")}, {plural(p.content, "vidéo prête", "vidéos prêtes")}
-          {p.pending > 0 && `, ${plural(p.pending, "idée commandée", "idées commandées")}`}
+        <span className="muted ax-stock-parts">
+          {parts.map((part, i) => (
+            <span key={i}>
+              {i > 0 ? ", " : ""}
+              {part}
+            </span>
+          ))}
         </span>
         {failed && (
           <span className="problem bad">Dernière génération en échec : {withoutAppPrefix(appId, cleanError(failed.last_error))}</span>
@@ -302,6 +415,7 @@ export function IdeasTab({ app, data, reload, go }: TabProps) {
   const byPhone = (ideas ?? []).filter((i) => phone === "all" || i.phone_id === phone);
   const counts = Object.fromEntries(FILTERS.map((f) => [f.key, byPhone.filter((i) => f.match(i.status)).length])) as Record<StatusFilter, number>;
   const active: StatusFilter = filter ?? (counts.proposed > 0 ? "proposed" : "all");
+  const filters = FILTERS.filter((f) => ALWAYS.includes(f.key) || counts[f.key] > 0 || f.key === active);
   const shown = byPhone.filter((i) => FILTERS.find((f) => f.key === active)!.match(i.status));
   const failedFor = (phoneId: string) => {
     const latest = (data.jobs ?? []).find((j) => j.kind === "ideas.generate" && j.payload?.phone_id === phoneId);
@@ -372,7 +486,7 @@ export function IdeasTab({ app, data, reload, go }: TabProps) {
           </div>
         )}
         <div className="seg" role="group" aria-label="Filtrer par statut">
-          {FILTERS.map((f) => (
+          {filters.map((f) => (
             <button key={f.key} type="button" aria-pressed={active === f.key} onClick={() => setFilter(f.key)}>
               {f.label}
               <span className="count">{counts[f.key]}</span>

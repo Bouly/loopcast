@@ -1,5 +1,6 @@
 import { InstagramIcon, TiktokIcon } from "@hugeicons/core-free-icons";
 import { createContext, useContext, useEffect, useState } from "react";
+import { videoTitle } from "../../format";
 import { Icon } from "../../ui";
 import { postersAvailable, posterUrl, type Account, type Post } from "./api";
 import { accountState, postState, type Tone } from "./model";
@@ -35,6 +36,12 @@ export function PlatformIcon({ platform, size = 15 }: { platform: string; size?:
   return icon ? <Icon icon={icon} size={size} className="cal-platform" /> : null;
 }
 
+/** Le titre français d'un format (« Carrousel de slides »), fourni une fois par la page (useFormatTitle). */
+export const FormatTitleContext = createContext<(id: string | null | undefined) => string>(() => "");
+
+/** Le titre d'une vidéo, le même qu'en validation : son accroche. */
+export const postTitle = (post: Post) => videoTitle({ hook: post.hook, id: "" }) || "Vidéo sans accroche";
+
 /* Miniatures : seulement si le module production les sert (sinon, aucune image demandée). */
 export const PostersContext = createContext(false);
 const missing = new Set<string>(); // contenus sans aperçu : on ne les redemande pas à chaque affichage
@@ -69,31 +76,4 @@ export function Thumb({ contentId, size = "sm" }: { contentId: string; size?: "s
       }}
     />
   );
-}
-
-/** Copie un texte ; repli sans l'API presse-papiers (page servie en http par Tailscale, pas en https). */
-export async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // on tente la méthode ancienne ci-dessous
-  }
-  const area = document.createElement("textarea");
-  area.value = text;
-  area.setAttribute("readonly", "");
-  area.className = "cal-copy-buffer";
-  document.body.appendChild(area);
-  area.select();
-  area.setSelectionRange(0, text.length);
-  let ok = false;
-  try {
-    ok = document.execCommand("copy");
-  } catch {
-    ok = false;
-  }
-  area.remove();
-  return ok;
 }

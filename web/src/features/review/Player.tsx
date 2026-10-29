@@ -338,7 +338,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
             {total > 1 && (
               <>
                 <button
-                  className="rv-ov-btn rv-prev"
+                  className="rv-ov-btn tap rv-prev"
                   onClick={() => step(-1)}
                   disabled={index === 0}
                   aria-label="Image précédente"
@@ -346,7 +346,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
                   <Icon icon={ArrowLeft01Icon} />
                 </button>
                 <button
-                  className="rv-ov-btn rv-next"
+                  className="rv-ov-btn tap rv-next"
                   onClick={() => step(1)}
                   disabled={index === total - 1}
                   aria-label="Image suivante"
@@ -359,7 +359,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(
         ) : (
           <>
             <button
-              className="rv-ov-btn rv-sound"
+              className="rv-ov-btn tap rv-sound"
               onClick={toggleSound}
               aria-label={muted ? "Activer le son" : "Couper le son"}
               aria-pressed={!muted}

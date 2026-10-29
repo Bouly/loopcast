@@ -1,6 +1,6 @@
 import { Shield01Icon, Target02Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState, type ReactNode } from "react";
-import { dateTime } from "../../format";
+import { ago, agoInSentence } from "../../format";
 import { Icon } from "../../ui";
 import type { Lang, StrategyRecord } from "./api";
 import type { TabProps } from "./AppDetail";
@@ -65,7 +65,7 @@ function Card({ title, meta, children, className = "" }: { title: string; meta?:
 }
 
 function statusOf(r: StrategyRecord): { text: string; cls: string } {
-  if (r.status === "approved") return { text: `En vigueur depuis le ${dateTime(r.approved_at)}`, cls: "ok" };
+  if (r.status === "approved") return { text: `En vigueur, approuvée ${agoInSentence(r.approved_at)}`, cls: "ok" };
   if (r.status === "draft") return { text: "À approuver", cls: "warn" };
   return { text: "Archivée", cls: "" };
 }
@@ -148,7 +148,7 @@ export function StrategyTab({
             <span className={`badge ${status.cls}`}>{status.text}</span>
           </div>
           <p className="muted">
-            Générée le {dateTime(record.created_at)}
+            Générée {agoInSentence(record.created_at)}
             {notes.other.length > 0 && `, ${notes.other.join(", ").toLowerCase()}`}
           </p>
         </div>
@@ -395,7 +395,7 @@ export function StrategyTab({
                     <li key={v.id}>
                       <span className="ax-strong">v{v.version}</span>
                       <span className={`badge ${vs.cls}`}>{v.status === "approved" ? "En vigueur" : vs.text}</span>
-                      <span className="muted ax-versions-date">{dateTime(v.created_at)}</span>
+                      <span className="muted ax-versions-date">{ago(v.created_at)}</span>
                       {vn.instruction && <span className="ax-versions-note muted">Consigne : {vn.instruction}</span>}
                     </li>
                   );

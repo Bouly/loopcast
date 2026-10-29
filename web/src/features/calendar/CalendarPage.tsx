@@ -7,13 +7,16 @@ import {
   RefreshIcon,
 } from "@hugeicons/core-free-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { zoneLabel } from "../../format";
+import { useFormatTitle } from "../../formats";
+import { toast } from "../../toast";
 import { Icon } from "../../ui";
 import { AccountDrawer } from "./AccountDrawer";
 import { diffusion, errorText, type Account, type Calendar } from "./api";
 import { addDays, isDay, mondayOf, period, shortDate, todayIn, yearOf } from "./dates";
 import { DayView } from "./DayView";
-import { autopilotHealth, countsText, tickSummary } from "./model";
-import { PostersContext, usePosters } from "./parts";
+import { autopilotHealth, capitalize, countsText, tickSummary } from "./model";
+import { FormatTitleContext, PostersContext, usePosters } from "./parts";
 import { TodoSection } from "./TodoSection";
 import { useCalendar, type CalendarData } from "./useCalendar";
 import { WeekGrid, type OpenAccount } from "./WeekGrid";
@@ -58,7 +61,12 @@ function useChosenWeek() {
   return [chosen, choose] as const;
 }
 
-/** Le panneau ouvert vit dans l'adresse (#phone-1:tiktok), comme celui d'un iPhone dans la ferme. */
+/** Le panneau ouvert vit dans l'adresse (#phone-1:tiktok), comme celui d'un iPhone dans la ferme ; `?post=12` met
+ * un post en avant (lien depuis une idée ou une vidéo). */
+function readPost(): number | null {
+  return Number(new URLSearchParams(location.search).get("post")) || null;
+}
+
 function readHash(): string | null {
   try {
     return decodeURIComponent(location.hash.slice(1)) || null;
@@ -82,22 +90,13 @@ function useAccountHash() {
     location.hash = encodeURIComponent(accountId);
   }, []);
   const close = useCallback(() => {
-    history.replaceState(history.state, "", location.pathname + location.search);
+    const params = new URLSearchParams(location.search);
+    params.delete("post");
+    const qs = params.toString();
+    history.replaceState(history.state, "", `${location.pathname}${qs ? `?${qs}` : ""}`);
     setId(null);
   }, []);
   return { id, open, close };
-}
-
-/** Le fuseau du navigateur diffère de celui de la diffusion : on dit dans quelle heure on lit. */
-function zoneNote(timezone: string): string {
-  let local = "";
-  try {
-    local = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    // navigateur sans Intl complet : on affiche la note
-  }
-  if (local === timezone) return "";
-  return `Heure de ${(timezone.split("/").pop() ?? timezone).replace(/_/g, " ")}`;
 }
 
 function postCount(calendar: Calendar): number {
@@ -136,9 +135,9 @@ export function CalendarPage() {
   const [chosen, choose] = useChosenWeek();
   const { data, error, reload } = useCalendar(chosen);
   const { id: accountId, open, close } = useAccountHash();
-  const [focusPost, setFocusPost] = useState<number | null>(null);
+  const [focusPost, setFocusPost] = useState<number | null>(readPost);
   const [ticking, setTicking] = useState(false);
-  const [flash, setFlash] = useState<{ text: string; err: boolean } | null>(null);
+  const formatTitle = useFormatTitle();
 
   useEffect(() => {
     const previous = document.title;
@@ -170,17 +169,18 @@ export function CalendarPage() {
 
   const tick = async () => {
     setTicking(true);
-    setFlash(null);
     try {
-      const report = await diffusion.tick();
-      setFlash(tickSummary(report, timezone ?? "Europe/Paris"));
+      const report = tickSummary(await diffusion.tick());
+      toast(report.text, { tone: report.err ? "error" : "done" });
       reload();
     } catch (e) {
-      setFlash({ text: errorText(e), err: true });
+      toast(`Le tour n'a pas pu tourner : ${errorText(e)}`, { tone: "error" });
     } finally {
       setTicking(false);
     }
   };
+  // Un post attend quelqu'un : « Publié » porte le noir, le tour redevient une action secondaire.
+  const waiting = (data?.waiting.length ?? 0) > 0;
 
   const health = data ? autopilotHealth(data.status) : null;
   // Premier chargement en échec : on ne sait rien, donc on ne montre ni « rien à finir » ni une semaine vide.
@@ -196,80 +196,78 @@ export function CalendarPage() {
 
   return (
     <PostersContext.Provider value={posters}>
-      <main className="page cal">
-        <div className="page-head">
-          <div>
-            <h1>Calendrier</h1>
-            <p>
-              {headline}
-              {data?.status.dry_run && <span className="badge cal-badge">Simulation : rien n'est publié</span>}
-            </p>
-          </div>
-          <div className="actions">
-            <button type="button" className="btn primary" onClick={tick} disabled={ticking || !data}>
-              <Icon icon={RefreshIcon} />
-              {ticking ? "Tour en cours…" : "Lancer un tour"}
-            </button>
-          </div>
-        </div>
-
-        <p className={`cal-flash${flash?.err ? " is-err" : ""}`} role="status">
-          {flash?.text}
-        </p>
-
-        {error && (
-          <div className="banner page-banner" role="alert">
-            <Icon icon={Alert02Icon} className="ic-bad" />
+      <FormatTitleContext.Provider value={formatTitle}>
+        <main className="page cal">
+          <div className="page-head">
             <div>
-              <strong>{data ? "Calendrier pas à jour." : "Calendrier indisponible."}</strong>{" "}
-              <span className="muted">
-                {error}
-                {data ? " Les informations ci-dessous datent du dernier chargement." : " Il s'affichera dès que le serveur répondra."}
-              </span>
+              <h1>Calendrier</h1>
+              <p>
+                {headline}
+                {data?.status.dry_run && <span className="badge cal-badge">Simulation : rien n'est publié</span>}
+              </p>
+            </div>
+            <div className="actions">
+              <button type="button" className={`btn${waiting ? "" : " primary"}`} onClick={tick} disabled={ticking || !data}>
+                <Icon icon={RefreshIcon} />
+                {ticking ? "Tour en cours…" : "Lancer un tour"}
+              </button>
             </div>
           </div>
-        )}
-        {health?.tone && (
-          <div className="banner page-banner" role="alert">
-            <Icon icon={Alert02Icon} className={health.tone === "bad" ? "ic-bad" : "ic-warn"} />
-            <div>{health.text}</div>
-          </div>
-        )}
 
-        {!offline && (
-          <>
-            <TodoSection
-              posts={data ? data.waiting : null}
-              accounts={accounts}
-              today={today}
-              onOpenAccount={openAccount}
-              onChanged={reload}
-            />
-            <WeekSection
-              data={data}
-              accounts={accounts}
-              shownWeek={shownWeek}
-              today={today}
-              narrow={narrow}
-              onGo={go}
-              onToday={() => choose(null)}
-              onOpen={openAccount}
-            />
-          </>
-        )}
-      </main>
+          {error && (
+            <div className="banner page-banner" role="alert">
+              <Icon icon={Alert02Icon} className="ic-bad" />
+              <div>
+                <strong>{data ? "Calendrier pas à jour." : "Calendrier indisponible."}</strong>{" "}
+                <span className="muted">
+                  {error}
+                  {data ? " Les informations ci-dessous datent du dernier chargement." : " Il s'affichera dès que le serveur répondra."}
+                </span>
+              </div>
+            </div>
+          )}
+          {health?.tone && (
+            <div className="banner page-banner" role="alert">
+              <Icon icon={Alert02Icon} className={health.tone === "bad" ? "ic-bad" : "ic-warn"} />
+              <div>{health.text}</div>
+            </div>
+          )}
 
-      {accountId && timezone && (
-        <AccountDrawer
-          key={accountId}
-          accountId={accountId}
-          focusPost={focusPost}
-          today={today}
-          timezone={timezone}
-          onClose={close}
-          onChanged={reload}
-        />
-      )}
+          {!offline && (
+            <>
+              <TodoSection
+                posts={data ? data.waiting : null}
+                accounts={accounts}
+                today={today}
+                onOpenAccount={openAccount}
+                onChanged={reload}
+              />
+              <WeekSection
+                data={data}
+                accounts={accounts}
+                shownWeek={shownWeek}
+                today={today}
+                narrow={narrow}
+                onGo={go}
+                onToday={() => choose(null)}
+                onOpen={openAccount}
+              />
+            </>
+          )}
+        </main>
+
+        {accountId && timezone && (
+          <AccountDrawer
+            key={accountId}
+            accountId={accountId}
+            focusPost={focusPost}
+            today={today}
+            timezone={timezone}
+            onClose={close}
+            onChanged={reload}
+          />
+        )}
+      </FormatTitleContext.Provider>
     </PostersContext.Provider>
   );
 }
@@ -300,7 +298,7 @@ function WeekSection({
   const hasAccounts = !!calendar && calendar.accounts.length > 0;
   const empty = hasAccounts && !loadingWeek && postCount(calendar) === 0;
   const hasFuture = !!(shownWeek && today && addDays(shownWeek, 6) > today);
-  const zone = timezone ? zoneNote(timezone) : "";
+  const zone = timezone ? capitalize(zoneLabel(timezone)) : "";
 
   return (
     <section className="cal-weeksec" aria-labelledby="cal-week-title">

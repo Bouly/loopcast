@@ -29,6 +29,9 @@ export type AppOverview = {
     sources_pending: number;
     sources_error: number;
     questions_open: number;
+    /** Plus loin dans le parcours : idées à relire, vidéos à valider (rendues, contrôle réussi, pas décidées). */
+    ideas_proposed: number;
+    to_review: number;
   };
   brief: {
     id: number;
@@ -271,6 +274,19 @@ export type Idea = {
 
 export type IdeaStatus = "proposed" | "approved" | "rejected" | "producing" | "produced" | "failed";
 
+/** Un post de la vidéo d'une idée (calendrier). */
+export type VideoPost = {
+  id: number;
+  account_id: string;
+  platform: string;
+  status: string;
+  scheduled_at: string | null;
+  posted_at: string | null;
+};
+
+/** La vidéo d'une idée produite : à valider, validée (prête à publier), publiée… */
+export type IdeaVideo = { id: string; status: string; to_review: boolean; posts: VideoPost[] };
+
 export type IdeaRow = {
   id: string;
   app_id: string;
@@ -288,8 +304,11 @@ export type IdeaRow = {
   review_note: string | null;
   created_at: string;
   updated_at: string;
+  /** Sa vidéo, une fois produite (null avant). */
+  video?: IdeaVideo | null;
 };
 
+/** Le stock d'un téléphone (strategy/store.py, phone_stock), avec les mots de l'écran. */
 export type PhoneStock = {
   phone_id: string;
   lang: Lang;
@@ -298,6 +317,14 @@ export type PhoneStock = {
   content: number;
   pending: number;
   total: number;
+  /** Idées à relire. */
+  proposed: number;
+  /** Idées approuvées ou vidéos en cours de rendu. */
+  producing: number;
+  /** Vidéos rendues, contrôle qualité réussi, pas encore décidées. */
+  to_review: number;
+  /** Vidéos validées, pas encore publiées. */
+  ready: number;
 };
 export type Stock = { target: number; phones: PhoneStock[] };
 

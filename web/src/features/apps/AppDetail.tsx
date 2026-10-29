@@ -1,15 +1,17 @@
 import { ArrowLeft01Icon, Link01Icon, PauseIcon, PencilEdit02Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { inFuture } from "../../format";
+import { validationLink } from "../../links";
 import { Link, match, navigate, usePath } from "../../router";
 import { Icon } from "../../ui";
 import { appsApi, strategyApi, type AppOverview, type Job } from "./api";
 import { AppFormDrawer } from "./AppForm";
 import { BriefTab } from "./BriefTab";
 import { STRATEGY_KEYS, useAppDetail, type Key, type Loaded } from "./data";
-import { cleanError, hour, LANG_NAME, plural, shortUrl } from "./format";
+import { cleanError, LANG_NAME, plural, shortUrl } from "./format";
 import { IdeasTab } from "./IdeasTab";
 import { STATUS_LABEL, analysisFailure, hasMaterial, statusTone, strategyJob, teamTodo } from "./journey";
-import { AppAvatar, Empty, Notice, Skeleton, StatusText, ToastHost, toast, useTitle } from "./kit";
+import { AppAvatar, Empty, Notice, Skeleton, StatusText, toast, useTitle } from "./kit";
 import { QuestionsTab, useAnswerDrafts } from "./QuestionsTab";
 import { SourcesTab } from "./SourcesTab";
 import { StrategyTab } from "./StrategyTab";
@@ -38,7 +40,8 @@ export type TabProps = {
   onEditApp: () => void;
 };
 
-type Primary = { label: string; run?: () => void; to?: TabKey; disabled?: boolean; hint?: string };
+/** L'action principale : un geste (`run`), un onglet (`to`) ou une autre section (`href`, la validation). */
+type Primary = { label: string; run?: () => void; to?: TabKey; href?: string; disabled?: boolean; hint?: string };
 
 /** L'onglet de l'étape en cours, quand l'adresse n'en précise pas. */
 function defaultTab(app: AppOverview, data: Loaded): TabKey {
@@ -74,7 +77,7 @@ function analysisProgress(jobs: Job[]): { title: string; text: string } {
     };
   }
   if (job && job.attempts > 0 && job.last_error) {
-    return { title, text: `Nouvel essai à ${hour(job.run_after)} : ${cleanError(job.last_error)}` };
+    return { title, text: `Nouvel essai ${inFuture(job.run_after)} : ${cleanError(job.last_error)}` };
   }
   return { title, text: "Elle démarre dans un instant." };
 }
@@ -126,6 +129,15 @@ function AppDetail({ id }: { id: string }) {
     if (shownTab.current && tab && shownTab.current !== tab) window.scrollTo({ top: 0 });
     shownTab.current = tab;
   }, [tab]);
+
+  // Sur téléphone, la barre d'onglets défile : l'onglet ouvert reste visible (comme les filtres de Validation),
+  // aussi quand les compteurs des onglets arrivent et les élargissent.
+  const tabsNav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    tabsNav.current
+      ?.querySelector("[aria-current='page']")
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab, app, data.strategy, data.ideas]);
 
   /** Une action : un seul geste à la fois, erreur affichée en haut de la page. */
   const act = async (label: string, fn: () => Promise<unknown>, done: string, keys?: Key[], then?: () => void) => {
@@ -215,6 +227,10 @@ function AppDetail({ id }: { id: string }) {
     if (strategyError) return { label: "Relancer la stratégie", run: () => regenerate("") };
     if (!strategy.current) return { label: "Préparer la stratégie", run: () => regenerate("") };
     if (proposed > 0 && tab !== "idees") return { label: `Relire les idées (${proposed})`, to: "idees" };
+    const review = app.counts.to_review;
+    if (review > 0) {
+      return { label: `Valider ${plural(review, "vidéo", "vidéos")}`, href: validationLink({ app: app.id }) };
+    }
     return null;
   })();
 
@@ -386,7 +402,7 @@ function AppDetail({ id }: { id: string }) {
 
         {notices.length > 0 && <div className="ax-notices">{notices}</div>}
 
-        <nav className="ax-tabs" aria-label={app ? `Sections de ${app.name}` : "Sections de l'app"}>
+        <nav ref={tabsNav} className="ax-tabs" aria-label={app ? `Sections de ${app.name}` : "Sections de l'app"}>
           {TABS.map((t) => {
             const b = badges[t.key] ?? {};
             return (
@@ -442,12 +458,18 @@ function AppDetail({ id }: { id: string }) {
           }}
         />
       )}
-      <ToastHost />
     </>
   );
 }
 
 function PrimaryButton({ primary, busy, go }: { primary: Primary; busy: boolean; go: (t: TabKey) => void }) {
+  if (primary.href) {
+    return (
+      <Link to={primary.href} className="btn primary">
+        {primary.label}
+      </Link>
+    );
+  }
   if (primary.to) {
     const to = primary.to;
     return (

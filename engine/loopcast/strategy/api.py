@@ -197,9 +197,13 @@ def generate_for_phone(app_id: str, phone_id: str, request: Request, body: Gener
 @router.get("/ideas")
 def list_ideas(request: Request, app_id: str | None = None, phone_id: str | None = None, status: str | None = None,
                parent_id: str | None = None, limit: int = 100, offset: int = 0):
-    """`status` accepte plusieurs valeurs séparées par des virgules (« proposed,approved »)."""
-    return store.list_ideas(deps.conn(request), app_id=app_id, phone_id=phone_id, status=status,
-                            parent_id=parent_id, limit=limit, offset=offset)
+    """`status` accepte plusieurs valeurs séparées par des virgules (« proposed,approved »). Chaque idée porte
+    sa vidéo (`video` : statut, à valider ou non, posts), ou None tant qu'elle n'est pas produite."""
+    conn = deps.conn(request)
+    rows = store.list_ideas(conn, app_id=app_id, phone_id=phone_id, status=status, parent_id=parent_id,
+                            limit=limit, offset=offset)
+    videos = store.idea_videos(conn, [r["id"] for r in rows])
+    return [{**r, "video": videos.get(r["id"])} for r in rows]
 
 
 @router.get("/ideas/{idea_id}")

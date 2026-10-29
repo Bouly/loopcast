@@ -7,58 +7,15 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-  type TextareaHTMLAttributes,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type TextareaHTMLAttributes } from "react";
+import { copyText } from "../../clipboard";
+import { toast } from "../../toast";
 import { Icon } from "../../ui";
 import type { AppOverview } from "./api";
 import { STEPS, type Tone } from "./journey";
 
-// --- Notifications : en bas au centre, sombres, 3,5 s (doctrine) ------------------------------------------
-// Tenues hors de React : une notification survit au passage de la liste à une app.
-
-type Toast = { id: number; text: string };
-let toasts: Toast[] = [];
-let toastSeq = 0;
-const toastListeners = new Set<() => void>();
-const emitToasts = () => toastListeners.forEach((fn) => fn());
-
-export function toast(text: string) {
-  const id = (toastSeq += 1);
-  toasts = [...toasts.slice(-2), { id, text }];
-  emitToasts();
-  window.setTimeout(() => {
-    toasts = toasts.filter((t) => t.id !== id);
-    emitToasts();
-  }, 3500);
-}
-
-export function ToastHost() {
-  const list = useSyncExternalStore(
-    (fn) => {
-      toastListeners.add(fn);
-      return () => toastListeners.delete(fn);
-    },
-    () => toasts,
-  );
-  return (
-    <div className="ax-toasts" role="status" aria-live="polite">
-      {list.map((t) => (
-        <div key={t.id} className="ax-toast">
-          {t.text}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export const useToast = () => toast;
+// Notifications : celles de toute l'app (toast.tsx), en bas au centre, l'icône dit l'état.
+export { toast } from "../../toast";
 
 /** Titre de l'onglet du navigateur, au format d'index.html (« Loopcast · Ferme »). */
 export function useTitle(text: string | null | undefined) {
@@ -233,7 +190,7 @@ export function Chip({
   disabled?: boolean;
 }) {
   return (
-    <button type="button" className="ax-chip" aria-pressed={pressed} onClick={onClick} disabled={disabled}>
+    <button type="button" className="ax-chip tap" aria-pressed={pressed} onClick={onClick} disabled={disabled}>
       {pressed && <Icon icon={Tick02Icon} size={14} />}
       {children}
     </button>
@@ -289,17 +246,14 @@ export function Field({
   );
 }
 
+/** Copier : avec le repli du calendrier quand la page est servie en http (Tailscale), sans l'API presse-papiers. */
 export function CopyButton({ text, done = "Copié" }: { text: string; done?: string }) {
-  const notify = useToast();
-  const copy = () => {
-    if (!navigator.clipboard) return notify("Copie impossible ici : sélectionnez le texte à la main");
-    navigator.clipboard.writeText(text).then(
-      () => notify(done),
-      () => notify("Copie impossible : sélectionnez le texte à la main"),
-    );
+  const copy = async () => {
+    if (await copyText(text)) toast(done);
+    else toast("Copie impossible sur cet appareil : sélectionnez le texte à la main.", { tone: "error" });
   };
   return (
-    <button type="button" className="btn sm" onClick={copy}>
+    <button type="button" className="btn sm" onClick={() => void copy()}>
       <Icon icon={Copy01Icon} size={14} />
       Copier
     </button>

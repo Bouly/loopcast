@@ -1,6 +1,10 @@
 /** Dates du calendrier. Un jour s'écrit « AAAA-MM-JJ » dans le fuseau de la diffusion (réglage `timezone` du
  * serveur), jamais dans celui du navigateur : depuis un autre fuseau, on voit les mêmes journées que l'autopilote.
- * Les calculs se font en UTC pour ne jamais tomber dans un changement d'heure. */
+ * Les calculs se font en UTC pour ne jamais tomber dans un changement d'heure. Les heures viennent de
+ * src/format.ts (espaces insécables : « à 2 h 00 » ne se coupe pas). */
+import { clockIn, NBSP } from "../../format";
+
+export { clockIn };
 
 const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 const MONTHS_LONG = [
@@ -83,43 +87,31 @@ export function period(start: string, end: string, refYear: number): string {
   return `Du ${shortDate(start)} ${ys} au ${shortDate(end)} ${ye}`;
 }
 
-/** « 12:34 » (planning) → « 12 h 34 » (phrase). */
+/** « 12:34 » (planning) → « 12 h 34 » (phrase), insécable. */
 export function spokenTime(hhmm: string): string {
   const [h, m] = hhmm.split(":");
-  return `${Number(h)} h ${m}`;
+  return `${Number(h)}${NBSP}h${NBSP}${m}`;
 }
 
 /** Dans une phrase : « aujourd'hui à 12 h 34 », « hier à 19 h 05 », « 27 oct. à 8 h 10 ». */
 export function whenLabel(day: string | undefined, hhmm: string | undefined, today: string | null): string {
   if (!day || !hhmm) return "date inconnue";
-  const time = spokenTime(hhmm);
+  const time = `à${NBSP}${spokenTime(hhmm)}`;
   if (today) {
-    if (day === today) return `aujourd'hui à ${time}`;
-    if (day === addDays(today, -1)) return `hier à ${time}`;
-    if (day === addDays(today, 1)) return `demain à ${time}`;
+    if (day === today) return `aujourd'hui ${time}`;
+    if (day === addDays(today, -1)) return `hier ${time}`;
+    if (day === addDays(today, 1)) return `demain ${time}`;
   }
-  return `${shortDate(day, today ? yearOf(today) : undefined)} à ${time}`;
-}
-
-/** L'heure d'un instant ISO dans le fuseau de la diffusion : « 0 h 40 ». */
-export function clockIn(iso: string, timeZone: string): string {
-  const date = new Date(iso);
-  try {
-    const p = new Intl.DateTimeFormat("fr-FR", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(date);
-    const get = (type: string) => p.find((x) => x.type === type)?.value ?? "00";
-    return `${Number(get("hour"))} h ${get("minute")}`;
-  } catch {
-    return `${date.getHours()} h ${String(date.getMinutes()).padStart(2, "0")}`;
-  }
+  return `${shortDate(day, today ? yearOf(today) : undefined)} ${time}`;
 }
 
 /** Le jour et l'heure d'un instant ISO dans le fuseau de la diffusion : « 31 oct. à 14 h 05 ». */
 export function dateTimeIn(iso: string, timeZone: string, today: string | null): string {
   const day = todayIn(timeZone, new Date(iso).getTime());
-  const time = clockIn(iso, timeZone);
-  if (today && day === today) return `aujourd'hui à ${time}`;
-  if (today && day === addDays(today, 1)) return `demain à ${time}`;
-  return `${shortDate(day, today ? yearOf(today) : undefined)} à ${time}`;
+  const time = `à${NBSP}${clockIn(iso, timeZone)}`;
+  if (today && day === today) return `aujourd'hui ${time}`;
+  if (today && day === addDays(today, 1)) return `demain ${time}`;
+  return `${shortDate(day, today ? yearOf(today) : undefined)} ${time}`;
 }
 
 /** Temps écoulé, en clair : « 4 min », « 2 h », « 3 jours ». */

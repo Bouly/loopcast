@@ -31,13 +31,6 @@ export function clock(seconds: number | null | undefined): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** « 4 h 27 » (heure seule, pour un nouvel essai le jour même). */
-export function hour(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
 /** apps.apple.com/fr/app/habitudo/id123 : l'adresse sans le protocole ni la barre finale. */
 export function shortUrl(url: string | null | undefined): string {
   if (!url) return "";

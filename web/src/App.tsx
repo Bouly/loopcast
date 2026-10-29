@@ -7,6 +7,7 @@ import { useOnline } from "./live";
 import { FarmPage } from "./pages/FarmPage";
 import { Placeholder } from "./pages/Placeholder";
 import { Link, match, usePath } from "./router";
+import { Toaster } from "./toast";
 
 /** Les sections, dans l'ordre du parcours : comprendre l'app → valider les vidéos → planifier → produire. */
 const SECTIONS = [
@@ -62,6 +63,7 @@ export function App() {
         </div>
       </header>
       <Page path={path} />
+      <Toaster />
     </>
   );
 }

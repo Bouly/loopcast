@@ -15,12 +15,12 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { dateTime } from "../../format";
+import { agoInSentence, inFuture } from "../../format";
 import { Icon } from "../../ui";
 import { appsApi, sentence, type Asset, type AssetKind, type Job, type Source, type SourceKind } from "./api";
 import type { TabProps } from "./AppDetail";
 import { APPS_KEYS } from "./data";
-import { bytes, clock, cleanError, dec, hour, int, LANG_NAME, NNBSP, plural, shortUrl } from "./format";
+import { bytes, clock, cleanError, dec, int, LANG_NAME, NNBSP, plural, shortUrl } from "./format";
 import { ConfirmButton, Field, Notice, SectionHead, Skeleton, TextArea, toast } from "./kit";
 import { dismissUpload, enqueueUploads, retryUpload, useUploads, type Upload } from "./uploads";
 
@@ -151,10 +151,14 @@ function Dropzone({ appId, onUploaded }: { appId: string; onUploaded: () => void
       >
         <Icon icon={ImageUploadIcon} size={24} className="muted" />
         <div className="ax-drop-text">
-          <strong>Glissez ici les captures d'écran et les vidéos de démo</strong>
-          <span className="muted">
+          <strong className="off-touch">Glissez ici les captures d'écran et les vidéos de démo</strong>
+          <strong className="on-touch">Ajoutez les captures d'écran et les vidéos de démo</strong>
+          <span className="muted off-touch">
             PNG, JPEG, WebP, MOV ou MP4, enregistrées sur iPhone. Aussi des documents (PDF, texte). Une capture copiée se
             colle avec ⌘V.
+          </span>
+          <span className="muted on-touch">
+            Depuis la pellicule (photos et enregistrements d'écran) ou les fichiers : PNG, JPEG, MOV, MP4, PDF, texte.
           </span>
         </div>
         <button type="button" className="btn" onClick={() => input.current?.click()}>
@@ -491,18 +495,18 @@ const SOURCE_KIND: Record<SourceKind, { label: string; icon: IconSvgElement }> =
 
 function sourceStatus(s: Source, jobs: Job[]): { text: string; tone: "ok" | "warn" | "bad" | "info" | "" } {
   if (s.status === "ok") {
-    const parts = [`Lue le ${dateTime(s.fetched_at)}`, plural(s.chars, "caractère", "caractères")];
+    const parts = [`Lue ${agoInSentence(s.fetched_at)}`, plural(s.chars, "caractère", "caractères")];
     if (typeof s.meta.rating === "number" && s.meta.rating_count) {
       parts.push(`note ${dec(s.meta.rating)} sur 5 (${plural(s.meta.rating_count, "avis", "avis")})`);
     }
-    if (s.kind === "text") parts[0] = `Ajouté le ${dateTime(s.created_at)}`;
+    if (s.kind === "text") parts[0] = `Ajouté ${agoInSentence(s.created_at)}`;
     if (s.meta.truncated) parts.push("tronqué à 20 000");
     return { text: parts.join(", "), tone: "" };
   }
   if (s.status === "error") return { text: `Lecture impossible : ${cleanError(s.error)}`, tone: "bad" };
   const job = jobs.find((j) => j.kind === "apps.ingest_source" && Number(j.payload?.source_id) === s.id && RUNNING(j));
   if (s.error) {
-    const when = job && new Date(job.run_after).getTime() > Date.now() ? `Nouvel essai à ${hour(job.run_after)}. ` : "";
+    const when = job && new Date(job.run_after).getTime() > Date.now() ? `Nouvel essai ${inFuture(job.run_after)}. ` : "";
     return { text: `${when}${sentence(cleanError(s.error))}`, tone: "warn" };
   }
   return { text: "Lecture en cours…", tone: "info" };

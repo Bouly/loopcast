@@ -1,13 +1,15 @@
 import { Alert02Icon, InstagramIcon, PencilEdit02Icon, RefreshIcon, TiktokIcon } from "@hugeicons/core-free-icons";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { ago, dateTime } from "../../format";
+import { ago, agoInSentence, relative, videoTitle } from "../../format";
+import { calendarLink, platformName } from "../../links";
+import { Link } from "../../router";
 import { Icon } from "../../ui";
-import { phoneOf, type ContentDetail, type ContentItem, type Shot } from "./api";
+import { POST_STATE } from "../calendar/model";
+import { phoneOf, type ContentDetail, type ContentItem, type PostRef, type Shot } from "./api";
 import { Kbd } from "./bits";
 import {
   AI_SHOTS,
   CAPTION_MAX,
-  captionLine,
   HASHTAGS_MAX,
   hasAiLabel,
   LANGS,
@@ -52,6 +54,14 @@ export function Details({ item, detail, detailError, onRetryDetail, lookups, edi
       : `vidéo de ${seconds(item.duration_s ?? item.qa?.probe?.duration_s) || "durée inconnue"}`;
   const appName = lookups.appCount > 1 && item.app_id ? lookups.appName(item.app_id) : null;
 
+  // Échap (ou Enregistrer) referme l'éditeur de légende : le focus revient sur « Modifier », pas en haut de page.
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(editing);
+  useEffect(() => {
+    if (wasEditing.current && !editing) editButton.current?.focus({ preventScroll: true });
+    wasEditing.current = editing;
+  }, [editing]);
+
   return (
     <div className="rv-panel side">
       <header className="rv-head">
@@ -65,7 +75,7 @@ export function Details({ item, detail, detailError, onRetryDetail, lookups, edi
           {item.parent_id && <span className="badge">Variation d'une vidéo qui a marché</span>}
           {appName && <span className="badge">{appName}</span>}
         </div>
-        <h2>{idea?.hook || captionLine(item)}</h2>
+        <h2>{videoTitle({ ...item, hook: item.hook || idea?.hook })}</h2>
         <p className="rv-target">
           <span className="rv-chip">
             <Icon icon={TiktokIcon} size={14} />
@@ -86,6 +96,8 @@ export function Details({ item, detail, detailError, onRetryDetail, lookups, edi
           {format}, {what}.
         </p>
       </header>
+
+      {(detail?.posts?.length ?? 0) > 0 && <PostsSection posts={detail!.posts!} lookups={lookups} />}
 
       <section>
         <h3>L'idée</h3>
@@ -134,7 +146,7 @@ export function Details({ item, detail, detailError, onRetryDetail, lookups, edi
         <div className="rv-section-head">
           <h3>Légende et hashtags</h3>
           {!editing && (
-            <button className="btn ghost sm" onClick={() => onEditing(true)} aria-keyshortcuts="E">
+            <button ref={editButton} className="btn ghost sm" onClick={() => onEditing(true)} aria-keyshortcuts="E">
               <Icon icon={PencilEdit02Icon} size={14} />
               Modifier
               <Kbd>E</Kbd>
@@ -167,7 +179,7 @@ export function Details({ item, detail, detailError, onRetryDetail, lookups, edi
           <h3>Production</h3>
           <p className="rv-text muted">
             {(item.run ?? 0) > 0 ? `Production n° ${(item.run ?? 0) + 1}` : "Première production"}
-            {item.updated_at ? `, prête ${ago(item.updated_at).toLowerCase()}` : ""}. Relancer la retire de la file ;
+            {item.updated_at ? `, rendue ${agoInSentence(item.updated_at)}` : ""}. Relancer la retire de la file ;
             elle revient une fois produite à nouveau.
           </p>
           <div className="rv-row-actions">
@@ -190,6 +202,38 @@ export function Details({ item, detail, detailError, onRetryDetail, lookups, edi
         </section>
       )}
     </div>
+  );
+}
+
+/** Où part la vidéo (ou où elle est partie) : chaque post mène au calendrier, panneau du compte ouvert. */
+function PostsSection({ posts, lookups }: { posts: PostRef[]; lookups: Lookups }) {
+  return (
+    <section>
+      <h3>Publication</h3>
+      <ul className="rv-posts">
+        {posts.map((p) => {
+          const state = POST_STATE[p.status as keyof typeof POST_STATE] ?? { label: p.status, tone: "idle" };
+          const when = p.posted_at ?? p.scheduled_at;
+          const handle = lookups.account(p.account_id)?.handle;
+          return (
+            <li key={p.id}>
+              <span className="rv-chip">
+                <Icon icon={p.platform === "instagram" ? InstagramIcon : TiktokIcon} size={14} />
+                {handle || platformName(p.platform)}
+              </span>
+              <span className="state rv-post-state">
+                <span className={`dot ${state.tone}`} aria-hidden />
+                {state.label}
+                {when ? <span className="muted"> {relative(when)}</span> : null}
+              </span>
+              <Link to={calendarLink(p.account_id, p.id)} className="btn ghost sm rv-post-link">
+                Voir dans le calendrier
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -439,7 +483,7 @@ function QaSection({ item }: { item: ContentItem }) {
               <Fact label="Son">{probe ? (probe.audio ? "Piste audio présente" : "Sans piste audio") : null}</Fact>
             </>
           )}
-          <Fact label="Contrôlée">{qa.checked_at ? dateTime(qa.checked_at) : null}</Fact>
+          <Fact label="Contrôlée">{qa.checked_at ? ago(qa.checked_at) : null}</Fact>
         </dl>
       )}
     </section>

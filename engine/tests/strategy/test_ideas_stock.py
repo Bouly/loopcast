@@ -65,9 +65,29 @@ def test_stock_counts_what_waits_to_be_published(sconn, tmp_path, seeded, clock,
     _content(sconn, "trash", "rejected")
     _content(sconn, "other-app", "approved", app="autre")
 
-    assert store.phone_stock(sconn, APP, "phone-1") == {"ideas": 4, "content": 2, "pending": 0, "total": 6}
+    # « planned » est rendu mais pas encore contrôlé : il est encore en production, pas « à valider ».
+    assert store.phone_stock(sconn, APP, "phone-1") == {
+        "ideas": 4, "content": 2, "pending": 0, "total": 6,
+        "proposed": 1, "producing": 4, "to_review": 0, "ready": 1}
     _idea(sconn, now, "i8", "approved", phone="phone-2")
     assert store.phone_stock(sconn, APP, "phone-2")["total"] == 1
+
+
+def test_stock_tells_videos_to_review_from_videos_ready_to_publish(sconn, seeded, clock):
+    """« 6 vidéos prêtes » mélangeait ce qui attend la validation et ce qui est validé : le détail les sépare."""
+    approve_strategy(sconn, clock())
+    now = clock()
+    for idea_id in ("r1", "r2", "a1"):
+        _idea(sconn, now, idea_id, "produced")
+    _content(sconn, "r1", "rendered", idea="r1")
+    _content(sconn, "r2", "rendered", idea="r2")
+    _content(sconn, "a1", "approved", idea="a1")
+    sconn.execute("""UPDATE content SET qa=? WHERE id IN ('r1', 'a1')""", (json.dumps({"ok": True}),))
+    sconn.execute("""UPDATE content SET qa=? WHERE id='r2'""", (json.dumps({"ok": False}),))
+
+    stock = store.phone_stock(sconn, APP, "phone-1")
+    assert (stock["to_review"], stock["ready"], stock["producing"], stock["proposed"]) == (1, 1, 1, 0)
+    assert stock["content"] == 3 and stock["total"] == 3
 
 
 def test_missing_ideas_are_ordered_per_phone_in_bounded_batches(sconn, tmp_path, seeded, clock, services):

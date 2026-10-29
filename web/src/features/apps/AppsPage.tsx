@@ -17,7 +17,7 @@ import {
   type Todo,
   type Tone,
 } from "./journey";
-import { AppAvatar, Empty, StatusText, ToastHost, Track, toast, useTitle } from "./kit";
+import { AppAvatar, Empty, StatusText, Track, toast, useTitle } from "./kit";
 import "./apps.css";
 
 export { AppDetailPage } from "./AppDetail";
@@ -219,7 +219,6 @@ export function AppsPage() {
           }}
         />
       )}
-      <ToastHost />
     </>
   );
 }

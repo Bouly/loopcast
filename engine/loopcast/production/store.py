@@ -20,6 +20,10 @@ ACTIVE = ("draft", "rendering")                 # production en cours
 FAILED = ("failed", "qa_failed")
 FINAL = ("approved", "rejected")                # décidé par un humain (ou par review_mode: auto)
 
+# L'accroche de l'idée : le titre d'une vidéo dans tous les écrans (validation, calendrier, idées).
+# Sous-requête plutôt que jointure : les colonnes de `content` restent sans préfixe dans les filtres.
+WITH_HOOK = "SELECT *, (SELECT i.hook FROM ideas i WHERE i.id = content.idea_id) AS hook FROM content"
+
 
 @contextmanager
 def tx(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
@@ -47,7 +51,7 @@ def dumps(value: Any) -> str:
 
 
 def get_content(conn: sqlite3.Connection, content_id: str) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM content WHERE id=?", (content_id,)).fetchone()
+    return conn.execute(f"{WITH_HOOK} WHERE id=?", (content_id,)).fetchone()
 
 
 def get_idea(conn: sqlite3.Connection, idea_id: str) -> sqlite3.Row | None:
@@ -121,8 +125,10 @@ def content_dir(config: Any, content_id: str) -> Path:
 
 
 def summary(row: sqlite3.Row) -> dict:
-    """Une ligne de la file de validation (sans le détail des plans)."""
+    """Une ligne de la file de validation (sans le détail des plans). `hook` : l'accroche de l'idée (lue avec
+    WITH_HOOK), None pour un contenu sans idée."""
     d = dict(row)
+    d["hook"] = d.get("hook") or None
     d["hashtags"] = loads(d.get("hashtags"), [])
     files = loads(d.get("files"), []) or []
     d["files"] = files

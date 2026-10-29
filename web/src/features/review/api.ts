@@ -34,6 +34,8 @@ export type ContentItem = {
   format: string;
   lang: string;
   kind: "video" | "carousel";
+  /** L'accroche de l'idée : le titre de la vidéo dans toutes les sections. */
+  hook: string | null;
   caption: string | null;
   hashtags: string[];
   status: ContentStatus;
@@ -89,10 +91,21 @@ export type IdeaInfo = {
   phone_id?: string | null;
 };
 
+/** Un post de la vidéo (calendrier) : où elle part, ou est partie. */
+export type PostRef = {
+  id: number;
+  account_id: string;
+  platform: string;
+  status: string;
+  scheduled_at: string | null;
+  posted_at: string | null;
+};
+
 export type ContentDetail = ContentItem & {
   composition: string | null;
   idea: IdeaInfo | null;
   shots: Shot[];
+  posts?: PostRef[];
 };
 
 export type Stats = { by_status: Partial<Record<ContentStatus, number>>; review: number };

@@ -329,7 +329,9 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [x] Génération LLM : compréhension de l'app (fiche + questions), stratégie (une voix par téléphone), idées validées — démo testée, **vrai Claude pas encore essayé (pas de clé)**
 - [x] Rendu piloté depuis Python + QA auto (durée, format, poids, images noires ou figées)
 - [x] Générateurs vidéo IA (fal.ai + faux fournisseur, routage par budget) — **pas encore essayés en vrai (pas de clé)**
-- [x] API FastAPI + front React : Apps, Validation, Calendrier, Production, Ferme
+- [x] API FastAPI + front React : Apps, Validation, Calendrier, Production, Ferme ; revue de cohérence du 29/10 corrigée
+      (stock « à valider » / « prête à publier », un seul titre par vidéo et liens idée → vidéo → post, zones
+      tactiles et champs à 16 px, notifications communes, heures relatives ou dans le fuseau des comptes)
 - [ ] Stockage objet + Publisher Instagram (squelette documenté seulement)
 - [ ] Publisher TikTok (squelette documenté ; en attendant : canal manuel « à finir »)
 - [x] Planification + régulateur + exécution des posts (3 par jour et par compte après montée en charge, plafond 5)

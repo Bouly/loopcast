@@ -1,10 +1,13 @@
 import { CheckmarkCircle02Icon, Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { useContext, useEffect, useRef, useState } from "react";
+import { copyText } from "../../clipboard";
+import { videoTitle } from "../../format";
+import { toast } from "../../toast";
 import { Icon } from "../../ui";
 import { diffusion, errorText, type Account, type Post } from "./api";
 import { elapsed, whenLabel } from "./dates";
 import { accountTitle, capitalize, lastLog, platformName } from "./model";
-import { copyText, PlatformIcon, PostersContext, Thumb } from "./parts";
+import { FormatTitleContext, PlatformIcon, PostersContext, Thumb } from "./parts";
 
 type Props = {
   posts: Post[] | null;
@@ -19,7 +22,6 @@ const byTime = (a: Post, b: Post) => (a.scheduled_at ?? "").localeCompare(b.sche
 /** En haut de la page : les posts qu'un humain doit finir (brouillon TikTok à publier, publication manuelle). */
 export function TodoSection({ posts, accounts, today, onOpenAccount, onChanged }: Props) {
   const [hidden, setHidden] = useState<ReadonlySet<number>>(() => new Set());
-  const [flash, setFlash] = useState("");
   const listRef = useRef<HTMLUListElement>(null);
   const quietRef = useRef<HTMLParagraphElement>(null);
   const focusAfter = useRef<number | null>(null);
@@ -46,7 +48,7 @@ export function TodoSection({ posts, accounts, today, onOpenAccount, onChanged }
   const done = (post: Post, message: string) => {
     focusAfter.current = list.indexOf(post);
     setHidden((h) => new Set(h).add(post.id));
-    setFlash(message);
+    toast(message);
     onChanged();
   };
 
@@ -54,7 +56,7 @@ export function TodoSection({ posts, accounts, today, onOpenAccount, onChanged }
     return (
       <p ref={quietRef} className="cal-quiet" role="status" tabIndex={-1}>
         <Icon icon={CheckmarkCircle02Icon} size={15} />
-        <span>{flash ? `${flash} ` : ""}Rien à finir : aucun post n'attend quelqu'un.</span>
+        <span>Rien à finir : aucun post n'attend quelqu'un.</span>
       </p>
     );
   }
@@ -71,9 +73,10 @@ export function TodoSection({ posts, accounts, today, onOpenAccount, onChanged }
         </span>
       </div>
       <ul ref={listRef} className="table cal-list">
-        {list.map((p) => (
+        {list.map((p, i) => (
           <TodoRow
             key={p.id}
+            first={i === 0}
             post={p}
             account={accounts.get(p.account_id)}
             today={today}
@@ -83,14 +86,12 @@ export function TodoSection({ posts, accounts, today, onOpenAccount, onChanged }
           />
         ))}
       </ul>
-      <p className="cal-flash" role="status">
-        {flash}
-      </p>
     </section>
   );
 }
 
 function TodoRow({
+  first,
   post,
   account,
   today,
@@ -98,6 +99,8 @@ function TodoRow({
   onDone,
   onChanged,
 }: {
+  /** La première ligne porte l'action principale de l'écran (« Publié » en noir). */
+  first: boolean;
   post: Post;
   account: Account | undefined;
   today: string | null;
@@ -109,26 +112,19 @@ function TodoRow({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<"posted" | "failed" | null>(null);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState<"ok" | "ko" | null>(null);
   const noteRef = useRef<HTMLInputElement>(null);
-  const copyTimer = useRef<number | null>(null);
   const posters = useContext(PostersContext);
+  const formatTitle = useContext(FormatTitleContext);
 
   useEffect(() => {
     if (failing) noteRef.current?.focus();
   }, [failing]);
-  useEffect(
-    () => () => {
-      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    },
-    [],
-  );
 
   const [device, platformKey] = post.account_id.split(":");
   const platform = post.platform ?? account?.platform ?? platformKey ?? "";
   const who = account ? accountTitle(account) : post.account_id;
   const content = post.content;
-  const caption = content?.text.split("\n")[0].trim();
+  const title = content ? videoTitle({ hook: post.hook, caption: content.text, id: content.id }) : "";
   const how = capitalize(lastLog(post));
   const since = post.log[post.log.length - 1]?.at;
 
@@ -147,10 +143,8 @@ function TodoRow({
   };
 
   const copy = async () => {
-    const ok = await copyText(content?.text ?? "");
-    setCopied(ok ? "ok" : "ko");
-    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    copyTimer.current = window.setTimeout(() => setCopied(null), 2500);
+    if (await copyText(content?.text ?? "")) toast("Légende copiée : collez-la dans l'app au moment de publier.");
+    else toast("Copie impossible sur cet appareil : sélectionnez la légende à la main.", { tone: "error" });
   };
 
   return (
@@ -159,8 +153,8 @@ function TodoRow({
       <div className="cal-todo-main">
         <div className="cal-todo-who">
           <PlatformIcon platform={platform} />
-          <button type="button" className="cal-link" onClick={() => onOpenAccount(post.account_id)}>
-            {who}
+          <button type="button" className="cal-link tap" onClick={() => onOpenAccount(post.account_id)}>
+            <span className="cal-ellipsis">{who}</span>
           </button>
           <span className="muted">
             {[account?.device ?? device, platformName(platform)].filter(Boolean).join(", ")}
@@ -169,8 +163,8 @@ function TodoRow({
         <p className="cal-todo-what">
           {content ? (
             <>
-              <span className="mono">{content.format}</span>
-              {caption ? ` : « ${caption} »` : ""}
+              <span className="cal-todo-title">{title}</span>
+              {formatTitle(content.format) && <span className="muted">, {formatTitle(content.format)}</span>}
             </>
           ) : (
             <span className="muted">Contenu introuvable : il a peut-être été supprimé.</span>
@@ -185,9 +179,9 @@ function TodoRow({
       </div>
       <div className="cal-todo-actions">
         {content?.text && (
-          <button type="button" className="btn ghost sm" onClick={copy}>
+          <button type="button" className="btn ghost sm" onClick={() => void copy()}>
             <Icon icon={Copy01Icon} size={14} />
-            {copied === "ok" ? "Légende copiée" : copied === "ko" ? "Copie impossible" : "Copier la légende"}
+            Copier la légende
           </button>
         )}
         <button
@@ -199,7 +193,7 @@ function TodoRow({
         >
           Échec
         </button>
-        <button type="button" className="btn sm" onClick={() => mark("posted")} disabled={busy !== null}>
+        <button type="button" className={`btn sm${first ? " primary" : ""}`} onClick={() => mark("posted")} disabled={busy !== null}>
           <Icon icon={Tick02Icon} size={14} />
           {busy === "posted" ? "Enregistrement…" : "Publié"}
         </button>

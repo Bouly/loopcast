@@ -38,6 +38,8 @@ export type Post = {
   metrics_at: string | null;
   winner: boolean;
   log: LogLine[];
+  /** L'accroche de l'idée : le titre de la vidéo, le même qu'en validation. */
+  hook?: string | null;
   /** Jour et heure dans le fuseau de la diffusion (publication, sinon créneau). */
   local_date?: string;
   local_time?: string;
@@ -82,7 +84,8 @@ export type Account = {
   paused_reason: string | null;
   stale: boolean;
   today: { date: string } & Record<PostStatus, number>;
-  stock: number; // vidéos validées que ce compte peut encore publier
+  stock: number; // prêtes à publier : vidéos validées que ce compte peut encore publier
+  to_review?: number; // à valider : rendues, contrôle réussi, pas encore décidées
   recent: Post[];
   /** Seulement dans le détail d'un compte : les 30 posts les plus récents, à venir compris. */
   posts?: Post[];

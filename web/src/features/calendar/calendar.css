@@ -21,7 +21,6 @@
 }
 .cal-platform { flex: none; color: var(--foreground); }
 .cal-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cal-copy-buffer { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 /* Miniature d'une vidéo (format 9:16), servie par le module production */
 .cal-thumb {
@@ -47,9 +46,6 @@
 /* ---------- En-tête de page ---------- */
 
 .cal-badge { margin-left: 8px; vertical-align: 1px; }
-.cal-flash { margin: -8px 0 14px; font-size: 13px; color: var(--muted-foreground); overflow-wrap: anywhere; }
-.cal-flash:empty { margin: 0; }
-.cal-flash.is-err { color: var(--destructive); }
 
 /* ---------- À finir ---------- */
 
@@ -59,7 +55,6 @@
 .cal-sk-line { display: block; width: 260px; max-width: 100%; height: 12px; }
 
 .cal-todo { margin-bottom: 28px; }
-.cal-todo .cal-flash { margin: 8px 0 0; }
 .cal-list { list-style: none; margin: 0; padding: 0; }
 
 .cal-todo-row {
@@ -79,8 +74,11 @@
 .cal-todo-row > .cal-thumb { grid-area: thumb; align-self: start; margin-right: -4px; }
 .cal-todo-main { grid-area: main; min-width: 0; }
 .cal-todo-who { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 12.5px; }
+/* Le texte se coupe dans son <span> (.cal-ellipsis) : le bouton lui-même ne rogne rien, pas même sa zone tactile */
 .cal-link {
+  display: inline-flex;
   max-width: 100%;
+  min-width: 0;
   padding: 0;
   border: 0;
   border-radius: var(--r-xs);
@@ -89,12 +87,11 @@
   font-weight: 600;
   color: var(--foreground);
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .cal-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 .cal-todo-what { margin: 3px 0 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-todo-title { font-weight: 500; }
+.cal-inline-link { color: var(--foreground); text-underline-offset: 2px; }
 .cal-todo-how {
   margin: 2px 0 0;
   font-size: 12.5px;
@@ -197,7 +194,8 @@
 .cal-acc-sub { font-size: 12.5px; }
 .cal-acc > .cal-state { margin-top: 5px; }
 .cal-acc-detail { font-size: 12px; }
-.cal-acc-detail.is-warn { color: var(--warn); }
+/* Ce qui empêche de publier se lit en entier (« Aucune vidéo prête à publier (2 à valider) ») */
+.cal-acc-detail.is-warn { color: var(--warn); white-space: normal; overflow-wrap: anywhere; }
 
 /* Un post dans la semaine : heure locale, état (pastille + libellé), vues */
 .cal-post {
@@ -218,6 +216,8 @@
 .cal-post-text { display: grid; gap: 1px; min-width: 0; }
 .cal-post-text > * { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .cal-post-time { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: -0.01em; color: var(--foreground); }
+/* L'accroche : le titre de la vidéo, le même qu'en validation */
+.cal-post-title { font-size: 12px; line-height: 1.35; white-space: nowrap; color: var(--foreground); }
 .cal-post-views { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cal-post.is-off .cal-post-time,
 .cal-line.is-off .cal-post-time,
@@ -271,6 +271,7 @@
 .cal-line-main { display: grid; flex: 1; gap: 2px; min-width: 0; }
 .cal-line-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .cal-line-views { margin-left: auto; font-size: 12.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.cal-line-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-why { font-size: 12.5px; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .cal-why.is-bad { color: var(--destructive); }
 
@@ -314,8 +315,10 @@
 .cal-dpost.is-focus { background: var(--brand-bg); }
 .cal-dpost-main { display: grid; flex: 1; gap: 3px; min-width: 0; }
 .cal-dpost-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; font-weight: 500; }
-.cal-dpost-sub { display: flex; flex-wrap: wrap; gap: 2px 10px; min-width: 0; color: var(--muted-foreground); }
-.cal-dpost-sub .mono { overflow-wrap: anywhere; }
+.cal-dpost-title { font-size: 13px; font-weight: 500; color: var(--foreground); text-decoration: none; overflow-wrap: anywhere; }
+.cal-dpost-title:hover { text-decoration: underline; text-underline-offset: 2px; }
+.cal-dpost-title:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: var(--r-xs); }
+.cal-dpost-sub { font-size: 12.5px; min-width: 0; color: var(--muted-foreground); }
 .cal-dpost-views { flex: none; }
 .cal-views { display: grid; justify-items: end; gap: 6px; }
 .cal-views-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }

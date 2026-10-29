@@ -261,40 +261,6 @@
 .prod-barlist-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prod-barlist-n { text-align: right; font-weight: 600; }
 
-/* ---------- Notification après un geste : en bas au centre, sombre, 3,5 s ---------- */
-
-.prod-toast-region {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(20px + env(safe-area-inset-bottom));
-  z-index: 30;
-  display: flex;
-  justify-content: center;
-  padding: 0 16px;
-  pointer-events: none;
-}
-.prod-toast {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  max-width: 520px;
-  padding: 10px 14px;
-  border-radius: var(--r-lg);
-  background: var(--foreground);
-  color: var(--background);
-  box-shadow: var(--pop-shadow);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
-  pointer-events: auto;
-  animation: prod-toast-in 160ms var(--ease);
-}
-.prod-toast-ic { flex: none; margin-top: 1px; }
-.prod-toast-ic.ok { color: var(--ok-border); }
-.prod-toast-ic.bad { color: var(--destructive-border); }
-@keyframes prod-toast-in { from { opacity: 0; transform: translateY(6px); } }
-
 /* ---------- Écrans étroits ---------- */
 
 @media (max-width: 960px) {

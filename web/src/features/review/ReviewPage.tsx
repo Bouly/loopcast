@@ -1,20 +1,24 @@
 import { Alert02Icon, CheckmarkCircle02Icon, Delete02Icon, FilterIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { videoTitle } from "../../format";
 import { Link } from "../../router";
 import { Icon } from "../../ui";
 import { phoneOf, type ContentItem, type Stats } from "./api";
 import { isControl, isTyping, Kbd } from "./bits";
 import { Details } from "./Details";
 import { History } from "./History";
-import { captionLine, hasAiLabel, plural } from "./labels";
+import { hasAiLabel, plural } from "./labels";
 import { Player, type MediaStatus, type PlayerHandle } from "./Player";
 import { RejectPicker } from "./RejectPicker";
-import { Toasts } from "./Toasts";
 import { useLookups } from "./useLookups";
 import { titleOf, useReview } from "./useReview";
 import "./review.css";
 
-/** Les réglages de la page vivent dans l'adresse (/validation?tel=phone-1) : un favori sur l'iPhone les garde. */
+/**
+ * Les réglages de la page vivent dans l'adresse (/validation?tel=phone-1) : un favori sur l'iPhone les garde.
+ * `app` et `tel` filtrent la file, `video` met une vidéo devant (lien depuis une idée) ou ouvre son panneau dans
+ * les décisions récentes (`vue=decidees`).
+ */
 function useSearch(): [URLSearchParams, (changes: Record<string, string | null>, push?: boolean) => void] {
   const [search, setSearch] = useState(() => location.search);
   useEffect(() => {
@@ -62,6 +66,7 @@ export function ReviewPage() {
   const view = params.get("vue") === "decidees" ? "history" : "queue";
   const appFilter = params.get("app");
   const phoneFilter = params.get("tel");
+  const wanted = params.get("video");
   const lookups = useLookups();
 
   const player = useRef<PlayerHandle>(null);
@@ -86,13 +91,14 @@ export function ReviewPage() {
     },
   });
 
-  const visible = useMemo(
-    () =>
-      review.queue.filter(
-        (c) => (!appFilter || c.app_id === appFilter) && (!phoneFilter || phoneOf(c.account_id) === phoneFilter),
-      ),
-    [review.queue, appFilter, phoneFilter],
-  );
+  const visible = useMemo(() => {
+    const list = review.queue.filter(
+      (c) => (!appFilter || c.app_id === appFilter) && (!phoneFilter || phoneOf(c.account_id) === phoneFilter),
+    );
+    // La vidéo demandée par un lien (une idée « à valider ») passe devant ; les autres gardent leur ordre.
+    const first = wanted ? list.findIndex((c) => c.id === wanted) : -1;
+    return first > 0 ? [list[first], ...list.slice(0, first), ...list.slice(first + 1)] : list;
+  }, [review.queue, appFilter, phoneFilter, wanted]);
   const current = visible[0] ?? null;
   const next = visible[1] ?? null;
   currentId.current = current?.id ?? null;
@@ -123,9 +129,16 @@ export function ReviewPage() {
       ? "La vidéo ne se charge pas : impossible de la garder sans l'avoir vue. Réessayez, jetez-la ou relancez la production."
       : null;
 
+  /** Une décision prise : la vidéo demandée par un lien ne repasse pas devant si on annule. */
+  const decided = (id: string) => {
+    if (id === wanted) setParams({ video: null });
+  };
+  /** Décisions récentes : la vidéo ouverte (son panneau) vit dans l'adresse. */
+  const openVideo = useCallback((id: string | null) => setParams({ video: id }), [setParams]);
   const keep = () => {
     if (!current || editing || media === "error" || !settled()) return;
     player.current?.flyOut("right");
+    decided(current.id);
     review.decide(current, { kind: "approve" });
   };
   const openReject = () => {
@@ -140,11 +153,13 @@ export function ReviewPage() {
     if (!current) return;
     setRejecting(false);
     player.current?.flyOut("left");
+    decided(current.id);
     review.decide(current, { kind: "reject", note, reason });
   };
   const relaunch = (regenerate: boolean) => {
     if (!current) return;
     player.current?.flyOut("left");
+    decided(current.id);
     review.decide(current, { kind: "retry", regenerate });
   };
 
@@ -266,11 +281,11 @@ export function ReviewPage() {
           </div>
           <div className="actions">
             <div className="seg" role="group" aria-label="Vue">
-              <button aria-pressed={view === "queue"} onClick={() => setParams({ vue: null }, true)}>
+              <button aria-pressed={view === "queue"} onClick={() => setParams({ vue: null, video: null }, true)}>
                 À valider
                 {review.loaded && <span className="count">{total}</span>}
               </button>
-              <button aria-pressed={view === "history"} onClick={() => setParams({ vue: "decidees" }, true)}>
+              <button aria-pressed={view === "history"} onClick={() => setParams({ vue: "decidees", video: null }, true)}>
                 Décidées récemment
               </button>
             </div>
@@ -278,7 +293,7 @@ export function ReviewPage() {
         </div>
 
         {view === "history" ? (
-          <History lookups={lookups} notify={review.notify} />
+          <History lookups={lookups} notify={review.notify} openId={wanted} onOpen={openVideo} />
         ) : (
           <>
             {(showApps || showPhones) && (
@@ -354,7 +369,7 @@ export function ReviewPage() {
                     onMuted={setMuted}
                     onSwipe={(dir) => (dir === "right" ? keep() : openReject())}
                     onStatus={setMedia}
-                    label={`Vidéo 1 sur ${visible.length} : ${captionLine(current)}`}
+                    label={`Vidéo 1 sur ${visible.length} : ${videoTitle(current)}`}
                   />
                   <div className="rv-cap">
                     <span className="num">
@@ -446,7 +461,6 @@ export function ReviewPage() {
           </>
         )}
       </main>
-      <Toasts toasts={review.toasts} onClose={review.dismiss} />
     </>
   );
 }
