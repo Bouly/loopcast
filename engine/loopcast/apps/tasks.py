@@ -77,13 +77,13 @@ def _ask(ctx: jobs.JobContext, *, task: str, content: list[dict], schema: type, 
             reason = f"budget : {check.reason}"
             raise jobs.RetryLater(max(60.0, (retry_at - now).total_seconds()), reason, result={"waiting": reason})
     try:
-        res = llm.structured(task=task, system=prompts.system_prompt(task), content=content, schema=schema)
+        # Le coût est inscrit même si la réponse est inutilisable (refus, réponse tronquée) : elle est facturée.
+        return llm_mod.call_and_record(llm, ctx.conn, clock=ctx.clock, task=task, system=prompts.system_prompt(task),
+                                       content=content, schema=schema, app_id=app_id, job_id=ctx.job.id, ref=ref)
     except llm_mod.LLMUnavailable as e:
         raise jobs.Permanent(str(e)) from e
     except llm_mod.LLMRefusal as e:
         raise jobs.Permanent(f"{e} : vérifier ce qui a été envoyé (description, captures, documents)") from e
-    llm_mod.record_cost(ctx.conn, res, at=ctx.clock(), task=task, app_id=app_id, job_id=ctx.job.id, ref=ref)
-    return res
 
 
 def _as(data: Any, model: type) -> Any:

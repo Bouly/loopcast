@@ -2,6 +2,7 @@
 
 import itertools
 import json
+from types import SimpleNamespace
 
 from loopcast import costs, jobs, llm
 from loopcast.strategy import prompts, store, tasks
@@ -218,3 +219,44 @@ def test_count_is_bounded(sconn, sconfig, seeded, clock):
     _enqueue(sconn, clock, count=50)
     run_jobs(sconn, sconfig, clock, {"llm": fake}, kinds=("ideas.generate",))
     assert prompts.section_json(text_of(fake.calls[0]), "commande")["nombre"] == store.MAX_BATCH
+
+
+class _PaidButUnusable:
+    """Le client du SDK anthropic : chaque appel rend une réponse coupée à max_tokens, facturée (usage rendu)."""
+
+    def __init__(self, stop="max_tokens"):
+        usage = SimpleNamespace(input_tokens=30_000, output_tokens=32_000, cache_read_input_tokens=0,
+                                cache_creation_input_tokens=0)
+        msg = SimpleNamespace(stop_reason=stop, usage=usage, parsed_output=None, content=[], model="claude-opus-5-5",
+                              stop_details=None)
+        self.calls = 0
+        outer = self
+
+        class _Stream:
+            def __enter__(self):
+                outer.calls += 1
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def get_final_message(self):
+                return msg
+
+        self.beta = SimpleNamespace(messages=SimpleNamespace(stream=lambda **kw: _Stream()))
+
+
+def test_a_paid_but_unusable_answer_is_still_recorded(sconn, sconfig, seeded, clock):
+    """Réponse tronquée (max_tokens) : la tâche meurt, mais Claude l'a facturée et le registre le voit
+    (avant : rien n'était inscrit, et le stock redemandait le même appel toutes les 6 h, hors budget)."""
+    approve_strategy(sconn, clock())
+    client = _PaidButUnusable()
+    jid = _enqueue(sconn, clock)
+    run_jobs(sconn, sconfig, clock, {"llm": llm.AnthropicLLM({}, client=client)}, kinds=("ideas.generate",))
+    row = job_row(sconn, jid)
+    assert row["status"] == "dead" and "réponse tronquée" in row["last_error"] and client.calls == 1
+    paid = llm.cost_of("claude-opus-5-5", 30_000, 32_000)
+    assert costs.spent(sconn, costs.day_start(clock()), APP) == round(paid, 6)
+    (entry,) = sconn.execute("SELECT * FROM cost_ledger").fetchall()
+    assert (entry["kind"], entry["job_id"], entry["ref"]) == ("llm", jid, f"ideas:{APP}:phone-1")
+    assert entry["note"].startswith("ideas.generate — réponse inutilisable : réponse tronquée")

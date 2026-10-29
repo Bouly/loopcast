@@ -5,6 +5,10 @@
     res.data        → AnalysisResult validé
     res.cost_usd    → coût de l'appel (inscrit au registre par record_cost)
 
+Les tâches passent par `call_and_record` : l'appel, puis son coût au registre, même quand la réponse est
+inutilisable (refus, réponse tronquée, sortie hors schéma) — Claude l'a facturée quand même ; l'usage et le
+coût voyagent alors dans l'exception (`LLMError.result`).
+
 Trois implémentations derrière la même interface :
 - AnthropicLLM : le vrai Claude (SDK officiel `anthropic`), réponse en flux, sortie structurée,
   repli automatique côté serveur si le modèle refuse, cache du prompt système ;
@@ -59,7 +63,13 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class LLMError(RuntimeError):
-    pass
+    """Échec d'un appel à Claude. `result` : l'usage et le coût de l'appel quand il a été facturé (refus,
+    réponse tronquée, sortie absente ou hors schéma) ; None quand rien n'a été facturé (clé refusée,
+    requête rejetée par l'API)."""
+
+    def __init__(self, message: str = "", result: "LLMResult | None" = None):
+        super().__init__(message)
+        self.result = result
 
 
 class LLMUnavailable(LLMError):
@@ -169,8 +179,11 @@ class AnthropicLLM:
                 # Le prompt système (consignes + savoir-faire) est stable : mis en cache.
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": blocks}],
-                output_format=schema,
-                output_config={"effort": effort},
+                # Le schéma part dans output_config.format, exactement ce que le SDK envoie pour output_format ;
+                # mais c'est nous qui lisons la réponse, une fois le flux fini. Avec output_format, le SDK la
+                # valide au milieu du flux : une réponse tronquée ou hors schéma lève une erreur de pydantic
+                # avant que l'usage soit connu, et l'appel, facturé, ne pourrait plus être inscrit au registre.
+                output_config={"effort": effort, "format": output_format(schema)},
                 betas=[FALLBACK_BETA],
                 fallbacks="default",
             ) as stream:
@@ -181,26 +194,63 @@ class AnthropicLLM:
             raise LLMError(f"requête refusée par l'API : {e.message}") from e
         # Les autres erreurs (429, 5xx, réseau) remontent telles quelles : la file de tâches réessaie.
 
+        res = _billed(msg, model)            # l'appel est facturé, que la réponse serve ou non
         if msg.stop_reason == "refusal":
             details = getattr(msg, "stop_details", None)
-            raise LLMRefusal(f"Claude a décliné ({getattr(details, 'category', None) or 'sans catégorie'})")
+            raise LLMRefusal(f"Claude a décliné ({getattr(details, 'category', None) or 'sans catégorie'})",
+                             result=res)
         if msg.stop_reason == "max_tokens":
-            raise LLMError(f"réponse tronquée à {max_tokens} tokens ({task}) : augmenter max_tokens")
-        data = msg.parsed_output
+            raise LLMError(f"réponse tronquée à {max_tokens} tokens ({task}) : augmenter max_tokens", result=res)
+        data, why = _parse(msg, schema)
         if data is None:
-            raise LLMError(f"réponse sans sortie structurée ({task}, stop={msg.stop_reason})")
+            raise LLMError(f"réponse sans sortie structurée valide ({task}, stop={msg.stop_reason}) : {why}",
+                           result=res)
+        res.data = data
+        return res
 
-        u = msg.usage
-        served_by = getattr(msg, "model", None) or model
-        in_t, out_t = u.input_tokens or 0, u.output_tokens or 0
-        c_read = getattr(u, "cache_read_input_tokens", 0) or 0
-        c_write = getattr(u, "cache_creation_input_tokens", 0) or 0
-        return LLMResult(
-            data=data, model=served_by, input_tokens=in_t, output_tokens=out_t,
-            cache_read_tokens=c_read, cache_write_tokens=c_write,
-            cost_usd=cost_of(served_by, in_t, out_t, c_read, c_write),
-            request_id=getattr(msg, "_request_id", None), stop_reason=msg.stop_reason,
-        )
+
+def output_format(schema: type[BaseModel]) -> dict:
+    """Le format JSON demandé à Claude, construit comme le fait le SDK pour `output_format` : schéma de pydantic
+    transformé pour l'API (anthropic.transform_schema)."""
+    import anthropic
+    from pydantic import TypeAdapter
+
+    return {"type": "json_schema", "schema": anthropic.transform_schema(TypeAdapter(schema).json_schema())}
+
+
+def _billed(msg: Any, model: str) -> LLMResult:
+    """L'usage d'une réponse et son coût ; `data` reste vide tant que la réponse n'est pas validée."""
+    u = getattr(msg, "usage", None)
+    served_by = getattr(msg, "model", None) or model
+    in_t, out_t = getattr(u, "input_tokens", 0) or 0, getattr(u, "output_tokens", 0) or 0
+    c_read = getattr(u, "cache_read_input_tokens", 0) or 0
+    c_write = getattr(u, "cache_creation_input_tokens", 0) or 0
+    return LLMResult(
+        data=None, model=served_by, input_tokens=in_t, output_tokens=out_t,
+        cache_read_tokens=c_read, cache_write_tokens=c_write,
+        cost_usd=cost_of(served_by, in_t, out_t, c_read, c_write),
+        request_id=getattr(msg, "_request_id", None), stop_reason=getattr(msg, "stop_reason", None),
+    )
+
+
+def _parse(msg: Any, schema: type[BaseModel]) -> tuple[Any, str]:
+    """La sortie structurée : déjà lue par le client (faux clients des tests), sinon le premier bloc de texte
+    conforme au schéma, validé comme le fait le SDK. Renvoie (données, "") ou (None, la raison)."""
+    from pydantic import TypeAdapter
+
+    parsed = getattr(msg, "parsed_output", None)
+    if parsed is not None:
+        return parsed, ""
+    why = "aucun bloc de texte"
+    adapter = TypeAdapter(schema)
+    for block in getattr(msg, "content", None) or []:
+        if getattr(block, "type", None) != "text":
+            continue
+        try:
+            return adapter.validate_json(block.text), ""
+        except ValueError as e:              # pydantic.ValidationError (JSON invalide compris)
+            why = str(e).splitlines()[0]
+    return None, why
 
 
 # --- Démo et tests -------------------------------------------------------------------------------------
@@ -296,7 +346,7 @@ def get_llm(config: Any, demo: bool | None = None) -> LLM:
 
 
 def record_cost(conn, res: LLMResult, *, at: datetime, task: str, app_id: str | None = None,
-                job_id: int | None = None, ref: str | None = None) -> None:
+                job_id: int | None = None, ref: str | None = None, note: str | None = None) -> None:
     """Inscrit l'appel au registre des coûts (rien pour la démo)."""
     if res.demo:
         return
@@ -304,4 +354,24 @@ def record_cost(conn, res: LLMResult, *, at: datetime, task: str, app_id: str | 
 
     costs.record(conn, at=at, provider="anthropic", kind="llm", cost_usd=res.cost_usd, app_id=app_id,
                  model=res.model, units=res.input_tokens + res.output_tokens, unit="tokens",
-                 job_id=job_id, ref=ref, note=task)
+                 job_id=job_id, ref=ref, note=(note or task)[:300])
+
+
+def call_and_record(llm: LLM, conn, *, clock: Callable[[], datetime], task: str, system: str,
+                    content: list[dict] | str, schema: type[T], app_id: str | None = None,
+                    job_id: int | None = None, ref: str | None = None, **options: Any) -> LLMResult:
+    """Le passage obligé des tâches : l'appel à Claude, puis son coût au registre, succès comme échec.
+    Un refus, une réponse tronquée ou hors schéma sont facturés : leur coût (porté par l'exception) est inscrit,
+    puis l'erreur repart telle quelle vers l'appelant. `options` : max_tokens, model, effort."""
+    try:
+        res = llm.structured(task=task, system=system, content=content, schema=schema, **options)
+    except LLMError as e:
+        if e.result is not None:
+            try:
+                record_cost(conn, e.result, at=clock(), task=task, app_id=app_id, job_id=job_id, ref=ref,
+                            note=f"{task} — réponse inutilisable : {e}")
+            except Exception:  # noqa: BLE001 : c'est l'erreur de Claude qui doit remonter, pas celle du registre
+                log.exception("%s : coût d'un appel en échec impossible à inscrire", task)
+        raise
+    record_cost(conn, res, at=clock(), task=task, app_id=app_id, job_id=job_id, ref=ref)
+    return res

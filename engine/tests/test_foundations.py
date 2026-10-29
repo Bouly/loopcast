@@ -221,19 +221,110 @@ def test_anthropic_llm_structured_call():
         task="asset.describe", system="Tu décris des captures.", content="Décris.", schema=AssetAnalysis)
     assert res.data.screen == "accueil"
     kw = client.kwargs
-    assert kw["model"] == "claude-opus-5-5" and kw["output_format"] is AssetAnalysis
-    assert kw["output_config"] == {"effort": "low"} and kw["fallbacks"] == "default"
+    # Le schéma part dans output_config.format (ce que le SDK envoie pour output_format) : on lit la réponse
+    # nous-mêmes, une fois le flux fini, pour connaître l'usage même quand elle est inutilisable.
+    assert kw["model"] == "claude-opus-5-5" and "output_format" not in kw
+    assert kw["output_config"] == {"effort": "low", "format": llm.output_format(AssetAnalysis)}
+    assert kw["output_config"]["format"]["type"] == "json_schema" and kw["fallbacks"] == "default"
     assert kw["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert res.cost_usd == pytest.approx((2000 * 4 + 500 * 20 + 1000 * 0.2) / 1e6)
 
 
 def test_anthropic_llm_refusal_and_truncation():
-    with pytest.raises(llm.LLMRefusal):
+    billed = (2000 * 4 + 500 * 20 + 1000 * 0.2) / 1e6
+    with pytest.raises(llm.LLMRefusal) as refused:
         llm.AnthropicLLM({}, client=_FakeClient(_msg(None, stop="refusal"))).structured(
             task="x", system="s", content="c", schema=AssetAnalysis)
-    with pytest.raises(llm.LLMError, match="tronquée"):
+    with pytest.raises(llm.LLMError, match="tronquée") as truncated:
         llm.AnthropicLLM({}, client=_FakeClient(_msg(None, stop="max_tokens"))).structured(
             task="x", system="s", content="c", schema=AssetAnalysis)
+    with pytest.raises(llm.LLMError, match="sans sortie structurée valide") as empty:
+        llm.AnthropicLLM({}, client=_FakeClient(_msg(None))).structured(
+            task="x", system="s", content="c", schema=AssetAnalysis)
+    for err in (refused, truncated, empty):                     # facturés : l'usage voyage avec l'erreur
+        res = err.value.result
+        assert res is not None and res.data is None and res.cost_usd == pytest.approx(billed)
+        assert (res.input_tokens, res.output_tokens, res.cache_read_tokens) == (2000, 500, 1000)
+
+
+# Le vrai SDK, sans réseau : un transport simulé rend le flux SSE d'une réponse (httpx2 : client HTTP du SDK).
+
+def _sse_answer(text: str, stop: str) -> bytes:
+    events = [
+        {"type": "message_start", "message": {
+            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5", "content": [],
+            "stop_reason": None, "stop_sequence": None,
+            "usage": {"input_tokens": 30_000, "output_tokens": 1, "cache_read_input_tokens": 0,
+                      "cache_creation_input_tokens": 0}}},
+        {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+        {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text}},
+        {"type": "content_block_stop", "index": 0},
+        {"type": "message_delta", "delta": {"stop_reason": stop, "stop_sequence": None},
+         "usage": {"output_tokens": 32_000}},
+        {"type": "message_stop"},
+    ]
+    return "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+
+
+def _sdk_client(text: str, stop: str, bodies: list):
+    import anthropic
+    import httpx2
+
+    def answer(request):
+        bodies.append(json.loads(request.content))
+        return httpx2.Response(200, headers={"content-type": "text/event-stream"}, content=_sse_answer(text, stop))
+
+    return anthropic.Anthropic(api_key="cle-factice-des-tests", max_retries=0,
+                               http_client=httpx2.Client(transport=httpx2.MockTransport(answer)))
+
+
+def test_truncated_answer_through_the_real_sdk_keeps_its_cost():
+    """Le SDK (output_format) validait la réponse au milieu du flux : une réponse tronquée levait une erreur de
+    pydantic, sans usage, et l'appel facturé n'était jamais inscrit. Elle lève maintenant LLMError avec son coût."""
+    bodies: list = []
+    ok = llm.AnthropicLLM({}, client=_sdk_client(_analysis().model_dump_json(), "end_turn", bodies)).structured(
+        task="asset.describe", system="s", content="c", schema=AssetAnalysis)
+    assert ok.data == _analysis() and ok.output_tokens == 32_000
+    with pytest.raises(llm.LLMError, match="tronquée") as err:
+        llm.AnthropicLLM({}, client=_sdk_client('{"screen": "accueil", "shows": "liste d', "max_tokens", bodies)
+                         ).structured(task="asset.describe", system="s", content="c", schema=AssetAnalysis)
+    billed = err.value.result
+    assert (billed.input_tokens, billed.output_tokens) == (30_000, 32_000)
+    assert billed.cost_usd == pytest.approx(llm.cost_of("claude-opus-5-5", 30_000, 32_000))
+
+    # Sur le fil, la requête est celle que le SDK construit lui-même avec output_format=AssetAnalysis.
+    with _sdk_client(_analysis().model_dump_json(), "end_turn", bodies).beta.messages.stream(
+            model="claude-opus-5-5", max_tokens=32000, messages=[{"role": "user", "content": "c"}],
+            output_format=AssetAnalysis, output_config={"effort": "low"}) as stream:
+        stream.get_final_message()
+    assert bodies[0]["output_config"] == bodies[-1]["output_config"]          # effort « low » et même schéma
+    assert bodies[0]["output_config"]["format"]["type"] == "json_schema" and "output_format" not in bodies[0]
+
+
+def test_call_and_record_records_billed_failures(jconn, clock):
+    """Le passage obligé des tâches : le coût d'une réponse inutilisable est inscrit, puis l'erreur remonte."""
+    paid = llm.LLMResult(data=None, model="claude-opus-5-5", input_tokens=30_000, output_tokens=32_000,
+                         cost_usd=0.76, stop_reason="max_tokens")
+
+    def truncated(req):
+        raise llm.LLMError("réponse tronquée à 32000 tokens", result=paid)
+
+    def rejected(req):
+        raise llm.LLMError("requête refusée par l'API : image trop grande")       # 400 : rien de facturé
+
+    fake = llm.FakeLLM({"asset.describe": lambda req: _analysis(), "app.analyze": truncated,
+                        "app.refine": rejected}, cost_usd=0.02)
+    ask = dict(system="s", content="c", schema=AssetAnalysis, app_id="habitudo", job_id=7)
+    res = llm.call_and_record(fake, jconn, clock=clock, task="asset.describe", ref="asset:1", **ask)
+    assert res.data == _analysis()
+    with pytest.raises(llm.LLMError, match="tronquée"):
+        llm.call_and_record(fake, jconn, clock=clock, task="app.analyze", ref="app:habitudo", **ask)
+    with pytest.raises(llm.LLMError, match="image trop grande"):
+        llm.call_and_record(fake, jconn, clock=clock, task="app.refine", ref="app:habitudo", **ask)
+    rows = jconn.execute("SELECT * FROM cost_ledger ORDER BY id").fetchall()
+    assert [(r["note"].split(" — ")[0], r["cost_usd"], r["job_id"]) for r in rows] == [
+        ("asset.describe", 0.02, 7), ("app.analyze", 0.76, 7)]
+    assert "réponse inutilisable : réponse tronquée" in rows[1]["note"] and rows[1]["units"] == 62_000
 
 
 def test_fake_llm_and_cost_record(jconn, clock):

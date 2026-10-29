@@ -5,6 +5,8 @@ import json
 import re
 import shutil
 import subprocess
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import pytest
 
@@ -52,6 +54,29 @@ def test_describe_asset_stores_the_analysis_and_its_cost(aconn, cfg, clock, fake
     jobs.enqueue(aconn, "apps.describe_asset", {"asset_id": shot["id"]}, key="encore", clock=clock)
     run()
     assert len(fake_llm.calls) == 1 and json.loads(job_row(aconn, "encore")["result"]) == {"skipped": "déjà décrit"}
+
+
+def test_a_refused_description_is_still_recorded(aconn, cfg, clock, services, run):
+    """Claude décline (refus) : la tâche meurt avec la raison, mais l'appel a été facturé et il est inscrit."""
+    usage = SimpleNamespace(input_tokens=1_800, output_tokens=40, cache_read_input_tokens=0,
+                            cache_creation_input_tokens=0)
+    msg = SimpleNamespace(stop_reason="refusal", usage=usage, parsed_output=None, content=[], model="claude-opus-5-5",
+                          stop_details=SimpleNamespace(category="cyber"))
+
+    @contextmanager
+    def stream(**kw):
+        yield SimpleNamespace(get_final_message=lambda: msg)
+
+    sdk = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(stream=stream)))
+    services["llm"] = llm.AnthropicLLM({}, client=sdk)
+    make_app(aconn, cfg, clock)
+    shot = add_file(aconn, cfg, clock)
+    run()
+    row = aconn.execute("SELECT status, last_error FROM jobs WHERE kind='apps.describe_asset'").fetchone()
+    assert row["status"] == "dead" and "Claude a décliné (cyber)" in row["last_error"]
+    (cost,) = aconn.execute("SELECT * FROM cost_ledger").fetchall()
+    assert (cost["kind"], cost["app_id"], cost["ref"]) == ("llm", "habitudo", f"asset:{shot['id']}")
+    assert cost["cost_usd"] == pytest.approx(llm.cost_of("claude-opus-5-5", 1_800, 40))
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg/ffprobe absents")
