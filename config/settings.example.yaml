@@ -22,6 +22,10 @@ llm:
   keychain_service: loopcast-anthropic   # clé dans le trousseau macOS, ou variable ANTHROPIC_API_KEY (jamais ici)
   demo: false                    # true = réponses de démo, sans clé ni coût
 
+api:
+  allowed_origins: []            # origines autorisées à MODIFIER (POST…) en plus du serveur lui-même,
+                                 # ex. ["https://mac-ferme.tail1234.ts.net"] pour le dashboard via Tailscale
+
 budget:                          # plafonds en $ ; au-delà, les générations attendent le lendemain
   daily_usd: 25
   daily_usd_per_app: 15

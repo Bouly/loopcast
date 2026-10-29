@@ -120,6 +120,21 @@ class OriginGuard:
         return o[1] in LOOPBACK_HOSTS and o[2] == port
 
 
+# Famille de tâche → événement que la section concernée du front écoute (web/src/live.tsx).
+JOB_EVENTS = {"apps.": "apps", "strategy.": "strategy", "ideas.": "strategy", "content.": "content",
+              "video.": "providers", "image.": "providers", "diffusion.": "diffusion"}
+
+
+def publish_job(bus, job, status: str) -> None:
+    """Une tâche vient de changer d'état : l'écran Production (« jobs ») et la section concernée l'apprennent."""
+    data = {"job_id": job.id, "kind": job.kind, "status": status, "app_id": job.app_id}
+    bus.publish("jobs", data)
+    for prefix, kind in JOB_EVENTS.items():
+        if job.kind.startswith(prefix):
+            bus.publish(kind, data)
+            break
+
+
 def create_app(
     config: Config,
     conn: sqlite3.Connection,
@@ -160,6 +175,8 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         bus.bind(asyncio.get_running_loop())
+        # Les tâches de fond n'ont pas accès au bus : la file prévient, on relaie au front en direct.
+        remove_listener = jobs.add_listener(lambda job, status: publish_job(bus, job, status))
         if supervise:
             threading.Thread(target=supervise_loop, name="supervision", daemon=True).start()
             threading.Thread(target=screens.run_forever, args=(stop, config.farm.thumb_seconds),
@@ -170,6 +187,7 @@ def create_app(
             jobs.run_worker(str(app.state.db_path), config, stop, services=app.state.services,
                             threads=int(jobs_cfg.get("threads", 3)), limits=jobs_cfg.get("limits") or {})
         yield
+        remove_listener()
         stop.set()
 
     app = FastAPI(title="Loopcast", lifespan=lifespan)

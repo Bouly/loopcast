@@ -1,6 +1,7 @@
 /** Client de l'API de diffusion (/api/diffusion, engine/loopcast/diffusion/api.py) pour la section Calendrier. */
 
-export type PostStatus = "scheduled" | "running" | "needs_human" | "posted" | "failed" | "skipped";
+/** `dry_run` : essai à blanc (réglage diffusion.dry_run) — ce qui serait parti, rien n'est publié. */
+export type PostStatus = "scheduled" | "running" | "needs_human" | "posted" | "failed" | "skipped" | "dry_run";
 
 /** Tous les statuts : par défaut, le calendrier du serveur cache les posts annulés (« skipped »). */
 export const POST_STATUSES: PostStatus[] = ["scheduled", "running", "needs_human", "posted", "failed", "skipped"];

@@ -54,7 +54,9 @@ def cmd_serve(args) -> int:
     if args.host not in ("127.0.0.1", "localhost") and not args.host.startswith("100."):
         print("Attention : n'écouter que sur 127.0.0.1 ou l'adresse Tailscale (100.x), jamais sur internet.",
               file=sys.stderr)
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    # Les flux en direct (/api/live) restent ouverts tant qu'un navigateur regarde : sans délai, l'arrêt (ou un
+    # redémarrage par launchd) attendrait indéfiniment qu'on ferme l'onglet.
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info", timeout_graceful_shutdown=3)
     return 0
 
 

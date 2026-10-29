@@ -77,3 +77,23 @@ def test_a_page_from_another_site_cannot_change_anything(config, conn, backend, 
             assert client.post("/api/farm/refresh", headers={"Origin": origin} if origin else {}).status_code == 200
         assert client.get("/api/phones", headers=evil).status_code == 200
         assert client.post(f"/api/jobs/{job}/retry").status_code == 200                        # la CLI, curl…
+
+
+def test_background_jobs_are_pushed_live(config, conn, backend, clock):
+    """Une tâche de fond qui se termine prévient le front (écran Production + section concernée)."""
+    from loopcast import jobs
+    from loopcast.api.app import publish_job
+
+    sent = []
+
+    class Bus:
+        def publish(self, kind, data):
+            sent.append((kind, data["status"]))
+
+    job = jobs.Job(id=7, kind="content.render", key=None, payload={}, attempts=1, max_attempts=3,
+                   app_id="habitudo", parent_id=None)
+    publish_job(Bus(), job, "done")
+    assert sent == [("jobs", "done"), ("content", "done")]
+    with TestClient(create_app(config, conn, backend, db_path=":memory:")):
+        assert len(jobs.LISTENERS) == 1                    # branché pendant que le serveur tourne…
+    assert jobs.LISTENERS == []                            # …et retiré à l'arrêt

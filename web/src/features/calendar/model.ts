@@ -12,6 +12,7 @@ export const POST_STATE: Record<PostStatus, { label: string; tone: Tone }> = {
   posted: { label: "Publié", tone: "ok" },
   failed: { label: "Échec", tone: "bad" },
   skipped: { label: "Annulé", tone: "idle" },
+  dry_run: { label: "Essai à blanc", tone: "idle" },
 };
 
 const ACCOUNT_TONE: Record<AccountState, Tone> = {
