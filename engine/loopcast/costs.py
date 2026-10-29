@@ -56,6 +56,12 @@ def day_start(now: datetime) -> datetime:
     return now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def usd(amount: float) -> str:
+    """« 1 248,90 $ » : montants au format français dans les messages."""
+    whole, cents = f"{amount:,.2f}".split(".")
+    return f"{whole.replace(',', '\u202f')},{cents} $"
+
+
 @dataclass
 class BudgetCheck:
     ok: bool
@@ -75,17 +81,17 @@ def check_budget(conn: sqlite3.Connection, settings: dict, now: datetime, estima
     tomorrow = start + timedelta(days=1)
     today = spent(conn, start)
     if today + estimate_usd > b["daily_usd"]:
-        return BudgetCheck(False, f"plafond du jour atteint ({today:.2f} $ / {b['daily_usd']:.2f} $)", tomorrow)
+        return BudgetCheck(False, f"plafond du jour atteint ({usd(today)} sur {usd(b['daily_usd'])})", tomorrow)
     if app_id:
         app_today = spent(conn, start, app_id)
         if app_today + estimate_usd > b["daily_usd_per_app"]:
             return BudgetCheck(False, f"plafond du jour pour {app_id} atteint "
-                                      f"({app_today:.2f} $ / {b['daily_usd_per_app']:.2f} $)", tomorrow)
+                                      f"({usd(app_today)} sur {usd(b['daily_usd_per_app'])})", tomorrow)
     month_start = start.replace(day=1)
     month = spent(conn, month_start)
     if month + estimate_usd > b["monthly_usd"]:
         next_month = (month_start + timedelta(days=32)).replace(day=1)
-        return BudgetCheck(False, f"plafond du mois atteint ({month:.2f} $ / {b['monthly_usd']:.2f} $)", next_month)
+        return BudgetCheck(False, f"plafond du mois atteint ({usd(month)} sur {usd(b['monthly_usd'])})", next_month)
     return BudgetCheck(True)
 
 
@@ -106,5 +112,8 @@ def summary(conn: sqlite3.Connection, now: datetime, settings: dict) -> dict:
         "budget": b,
         "today_by_app": by("app_id", start),
         "today_by_provider": by("provider", start),
+        "today_by_kind": by("kind", start),
+        "month_by_app": by("app_id", month_start),
+        "month_by_provider": by("provider", month_start),
         "month_by_kind": by("kind", month_start),
     }

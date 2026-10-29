@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { AppDetailPage, AppsPage } from "./features/apps/AppsPage";
 import { CalendarPage } from "./features/calendar/CalendarPage";
 import { ProductionPage } from "./features/production/ProductionPage";
@@ -31,6 +32,12 @@ export function App() {
   const path = usePath();
   const online = useOnline();
   const current = path === "/" ? "/ferme" : "/" + (path.split("/")[1] ?? "");
+  const section = SECTIONS.find((s) => s.path === current);
+
+  // Le titre de l'onglet suit la section (une page peut le préciser ensuite, ex. « Validation (4) »).
+  useEffect(() => {
+    document.title = section ? `Loopcast · ${section.label}` : "Loopcast";
+  }, [section]);
 
   return (
     <>
