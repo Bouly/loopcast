@@ -334,7 +334,7 @@ Formats suivants (famille « code pur », coût ~0) : faux post de réseau socia
 - [ ] Publisher TikTok (squelette documenté ; en attendant : canal manuel « à finir »)
 - [x] Planification + régulateur + exécution des posts (3 par jour et par compte après montée en charge, plafond 5)
 - [x] Métriques (saisie manuelle) + boucle des gagnants
-- [x] Autopilote + chien de garde + notifications ; [ ] services launchd du pipeline (ceux de la ferme existent)
+- [x] Autopilote + chien de garde + notifications ; lancé au démarrage par le service `com.loopcast.serve` (`ops/`), qui fait tourner l'API, la file de tâches et l'autopilote
 - [x] Tests (environ 390, tous verts, sans réseau ni clé)
 - [ ] Publisher iPhone via Appium : écrit, **non vérifié**, désactivé (raccourci iOS « Loopcast Import » à créer)
 
