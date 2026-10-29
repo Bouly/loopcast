@@ -44,8 +44,12 @@ def notify(title: str, message: str, settings: dict | None = None) -> None:
             log.warning("notification non envoyée (%d envois déjà en cours) : %s — %s", len(_pending), title, message)
             return
         thread = threading.Thread(target=_send, args=(title, message, settings), name="notify", daemon=True)
+        try:
+            thread.start()
+        except RuntimeError as e:                # plus de threads disponibles : on journalise, on ne casse rien
+            log.warning("notification non envoyée (%s) : %s — %s", e, title, message)
+            return
         _pending.add(thread)
-        thread.start()
 
 
 def flush(timeout: float = OSASCRIPT_TIMEOUT_S + NTFY_TIMEOUT_S) -> bool:
