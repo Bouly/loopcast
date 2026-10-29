@@ -168,7 +168,11 @@ export function autopilotHealth(status: Status): { text: string; tone?: "warn" |
     return { text: `Le dernier tour de l'autopilote a échoué${why ? ` : ${why}` : "."}`, tone: "bad" };
   }
   if (!status.next_tick) {
-    return { text: "Aucun tour de l'autopilote n'est prévu : la file de tâches ne tourne pas.", tone: "warn" };
+    // « Lancer un tour » fait un tour tout de suite mais ne réarme pas la chaîne : seul le démarrage du serveur la relance.
+    return {
+      text: "Aucun tour de l'autopilote n'est prévu : redémarrez le serveur Loopcast pour relancer l'autopilote.",
+      tone: "warn",
+    };
   }
   const late = Date.parse(status.now) - Date.parse(status.next_tick);
   if (late > 5 * 60_000) {

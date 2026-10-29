@@ -319,7 +319,7 @@
 .cal-dpost-views { flex: none; }
 .cal-views { display: grid; justify-items: end; gap: 6px; }
 .cal-views-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
-.cal-views .field { width: 96px; height: 30px; text-align: right; }
+.cal-views .field { width: 96px; text-align: right; }
 .cal-views .cal-err { margin: 0; max-width: 220px; text-align: right; }
 .cal-saved { font-size: 12px; color: var(--muted-foreground); }
 
