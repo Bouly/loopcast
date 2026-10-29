@@ -1,5 +1,8 @@
 """Comportements entre modules, trouvés pendant l'intégration (essai de bout en bout en démo)."""
 
+import threading
+import time
+
 from loopcast import accounts, db, jobs, modules
 from loopcast.config import Config, FarmSettings, PhoneConfig
 from loopcast.diffusion import planner
@@ -34,3 +37,72 @@ def test_diffusion_asks_stock_only_for_active_apps(tmp_path, clock):
     low = planner.check_stock(conn, cfg, clock())
     assert list(low) == ["habitudo"]
     assert conn.execute("SELECT COUNT(*) FROM jobs WHERE kind='ideas.ensure_stock'").fetchone()[0] == 1
+
+
+# --- Chien de garde : ce qui doit toujours tourner est relancé ------------------------------------------------
+
+def _wait_until(cond, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while not cond() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return cond()
+
+
+def test_the_first_executor_runs_the_watchdog_at_start_then_periodically(tmp_path):
+    """jobs.run_worker : au lancement puis toutes les `watchdog_s` ; une panne du chien de garde n'arrête rien."""
+    calls: list[str] = []
+
+    def watchdog(conn, config, clock):
+        calls.append(threading.current_thread().name)
+        if len(calls) == 1:
+            raise RuntimeError("panne passagère")
+
+    path = tmp_path / "loopcast.db"
+    db.connect(path).close()                                          # base migrée, comme au démarrage du serveur
+    stop = threading.Event()
+    threads = jobs.run_worker(str(path), _config(tmp_path), stop, threads=2, poll_s=0.01,
+                              watchdog_s=0.05, watchdog=watchdog)
+    try:
+        assert _wait_until(lambda: len(calls) >= 3)
+    finally:
+        stop.set()
+        for t in threads:
+            t.join(2)
+    assert set(calls) == {"jobs-0"}                                   # le premier exécutant seulement
+
+
+def test_by_default_the_worker_watchdog_is_the_modules_one(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(modules, "watchdog", lambda conn, config, clock: seen.append(config))
+    path = tmp_path / "loopcast.db"
+    db.connect(path).close()
+    stop = threading.Event()
+    cfg = _config(tmp_path)
+    threads = jobs.run_worker(str(path), cfg, stop, threads=1, poll_s=0.01)
+    try:
+        assert _wait_until(lambda: seen)
+    finally:
+        stop.set()
+        for t in threads:
+            t.join(2)
+    assert seen[0] is cfg
+
+
+def test_module_watchdogs_restart_the_autopilot_even_if_another_one_fails(tmp_path, clock, monkeypatch, caplog):
+    """modules.watchdog : chaque module qui a un chien de garde passe ; un module en panne n'arrête pas les autres."""
+    from loopcast.providers import startup as providers_startup
+
+    def broken(conn, config, clock):
+        conn.execute("BEGIN IMMEDIATE")
+        raise RuntimeError("registre illisible")
+
+    monkeypatch.setattr(providers_startup, "watchdog", broken)       # providers passe avant diffusion
+    conn = db.connect(":memory:")
+    modules.watchdog(conn, _config(tmp_path), clock)
+    assert not conn.in_transaction                                    # rien de laissé ouvert
+    assert [r[0] for r in conn.execute("SELECT key FROM jobs WHERE kind='diffusion.tick'")] == [
+        "diffusion.tick:2026-11-02T09:00"]
+    assert conn.execute("SELECT COUNT(*) FROM events WHERE kind='diffusion.watchdog'").fetchone()[0] == 1
+    assert "chien de garde du module loopcast.providers.startup en échec" in caplog.text
+    modules.watchdog(conn, _config(tmp_path), clock)                  # la chaîne tient : rien de plus
+    assert conn.execute("SELECT COUNT(*) FROM jobs WHERE kind='diffusion.tick'").fetchone()[0] == 1

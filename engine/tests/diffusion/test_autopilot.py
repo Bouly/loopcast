@@ -1,5 +1,6 @@
 """Autopilote : le tick se ré-enfile sans jamais se doubler, et une journée entière tourne seule."""
 
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -59,6 +60,72 @@ def test_failing_step_does_not_break_the_chain(conn, cfg, pubs, clock, add_conte
     assert "diffusion.tick:2026-11-16T05:10" in tick_keys(conn)                         # la chaîne continue
     assert conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 2                 # le reste a tourné
     assert conn.execute("SELECT COUNT(*) FROM events WHERE kind='diffusion.error'").fetchone()[0] == 1
+
+
+def _locked_tick_writes(monkeypatch, times: int) -> None:
+    """Les `times` prochaines écritures d'un diffusion.tick échouent (« database is locked » : un voisin tient
+    le verrou de la base plus longtemps que son délai d'attente)."""
+    real, left = jobs.enqueue, {"n": times}
+
+    def flaky(conn, kind, *a, **kw):
+        if kind == "diffusion.tick" and left["n"]:
+            left["n"] -= 1
+            raise sqlite3.OperationalError("database is locked")
+        return real(conn, kind, *a, **kw)
+
+    monkeypatch.setattr(autopilot.jobs, "enqueue", flaky)
+
+
+def test_a_failed_write_of_the_next_tick_is_retried(conn, cfg, pubs, clock, monkeypatch):
+    """Avant : max_attempts=1, une seule écriture ratée et le tick mourait sans successeur ; plus rien jusqu'au
+    prochain redémarrage. Maintenant il est réessayé peu après, et la chaîne repart."""
+    startup(conn, cfg, clock)
+    _locked_tick_writes(monkeypatch, 1)
+    services = {"publishers": pubs}
+    job = jobs.run_one(conn, cfg, "w", clock=clock, services=services)
+    row = conn.execute("SELECT status, attempts, run_after FROM jobs WHERE id=?", (job.id,)).fetchone()
+    assert row["status"] == "queued" and row["attempts"] == 1
+    assert datetime.fromisoformat(row["run_after"]) - clock() <= timedelta(seconds=36)    # attente courte
+    clock.advance(minutes=1)
+    assert jobs.run_one(conn, cfg, "w", clock=clock, services=services).id == job.id
+    assert tick_keys(conn) == ["diffusion.tick:2026-11-16T05:00", "diffusion.tick:2026-11-16T05:10"]
+    assert conn.execute("SELECT status FROM jobs WHERE id=?", (job.id,)).fetchone()[0] == "done"
+
+
+def test_the_watchdog_restarts_a_broken_chain(conn, cfg, pubs, clock, monkeypatch):
+    """Le tick meurt sans avoir pu écrire son successeur (trois écritures ratées) : le chien de garde,
+    au plus 5 min plus tard, en enfile un et l'inscrit au journal ; la chaîne repart."""
+    from loopcast.diffusion.startup import watchdog
+
+    startup(conn, cfg, clock)
+    assert watchdog(conn, cfg, clock) is None                                    # un tick attend : rien à faire
+    _locked_tick_writes(monkeypatch, 3)
+    services = {"publishers": pubs}
+    for _ in range(3):                                                           # 05:00, 05:02, 05:04
+        assert jobs.run_one(conn, cfg, "w", clock=clock, services=services) is not None
+        clock.advance(minutes=2)
+    assert [r[0] for r in conn.execute("SELECT status FROM jobs WHERE kind='diffusion.tick'")] == ["dead"]
+    assert jobs.run_one(conn, cfg, "w", clock=clock, services=services) is None  # plus rien ne tourne
+
+    clock.advance(minutes=2)                                                     # 05:08 : passage du chien de garde
+    new_id = watchdog(conn, cfg, clock)
+    assert tick_keys(conn) == ["diffusion.tick:2026-11-16T05:00", "diffusion.tick:2026-11-16T05:10"]
+    (event,) = conn.execute("SELECT message FROM events WHERE kind='diffusion.watchdog'").fetchall()
+    assert "autopilote relancé" in event[0] and "« dead » : sqlite3.OperationalError: database is locked" in event[0]
+    assert watchdog(conn, cfg, clock) is None                                    # une seule fois
+    clock.set(2026, 11, 16, 5, 10)
+    assert jobs.run_one(conn, cfg, "w", clock=clock, services=services).id == new_id
+    assert len(tick_keys(conn)) == 3                                             # et la chaîne continue
+
+
+def test_the_watchdog_starts_a_tick_when_none_ever_existed(conn, cfg, clock):
+    from loopcast.diffusion.startup import watchdog
+
+    job_id = watchdog(conn, cfg, clock)
+    assert tick_keys(conn) == ["diffusion.tick:2026-11-16T05:00"]
+    assert conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()[0] == "queued"
+    assert "aucun tick n'existait" in conn.execute("SELECT message FROM events WHERE kind='diffusion.watchdog'"
+                                                   ).fetchone()[0]
 
 
 def simulate(conn, cfg, clock, pubs, until: datetime) -> None:
