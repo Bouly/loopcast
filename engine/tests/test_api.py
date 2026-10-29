@@ -51,3 +51,29 @@ def test_unknown_phone_404(api):
 def test_spa_fallback(api):
     assert "Loopcast" in api.get("/ferme/phone-1").text
     assert api.get("/api/nope").status_code == 404
+
+
+def test_a_page_from_another_site_cannot_change_anything(config, conn, backend, clock):
+    """CSRF : une page d'un autre site ouverte sur le Mac ne peut rien modifier (403 avant toute action).
+    Passent : même origine, localhost sur le port du serveur, front de dev, api.allowed_origins, et les
+    requêtes sans Origin (CLI, curl). Les lectures ne sont pas concernées."""
+    from loopcast import jobs
+
+    config.settings["api"] = {"allowed_origins": ["https://mac.tail1234.ts.net"]}
+    job = jobs.enqueue(conn, "diffusion.tick", {}, clock=clock)
+    conn.execute("UPDATE jobs SET status='dead' WHERE id=?", (job,))
+    evil = {"Origin": "https://evil.example"}
+    with TestClient(create_app(config, conn, backend, db_path=":memory:")) as client:
+        for path in ("/api/content/c1/approve", "/api/content/c1/retry", f"/api/jobs/{job}/retry",
+                     "/api/diffusion/accounts/phone-1:tiktok/resume", "/api/farm/refresh"):
+            r = client.post(path, headers=evil)
+            assert r.status_code == 403 and "evil.example" in r.json()["detail"], path
+        assert conn.execute("SELECT status FROM jobs WHERE id=?", (job,)).fetchone()[0] == "dead"   # rien n'a bougé
+        assert client.post("/api/farm/refresh", headers={"Origin": "null"}).status_code == 403
+        assert client.delete(f"/api/phones/{UDID1}/session",
+                             headers={"Origin": "http://localhost:9999"}).status_code == 403    # autre port local
+        for origin in (None, "http://testserver", "http://localhost", "http://127.0.0.1:5173",
+                       "https://mac.tail1234.ts.net"):
+            assert client.post("/api/farm/refresh", headers={"Origin": origin} if origin else {}).status_code == 200
+        assert client.get("/api/phones", headers=evil).status_code == 200
+        assert client.post(f"/api/jobs/{job}/retry").status_code == 200                        # la CLI, curl…
