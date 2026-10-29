@@ -26,6 +26,22 @@ def clock():
     return Clock()
 
 
+@pytest.fixture(autouse=True)
+def _format_catalog_restored():
+    """Le catalogue des formats est global : un test qui construit les services sans générateur réel (formats
+    premium désactivés, providers/services.py) ne déteint pas sur les suivants."""
+    import loopcast.production.formats_extra  # noqa: F401 : les formats à plans, enregistrés avant la photo
+    from loopcast import formats
+    from loopcast.providers import services as provider_services
+
+    before = {k: s.enabled for k, s in formats.CATALOG.items()}
+    yield
+    for k, s in formats.CATALOG.items():
+        if k in before:
+            s.enabled = before[k]
+    provider_services._disabled_formats.clear()
+
+
 @pytest.fixture
 def config(tmp_path):
     return Config(
