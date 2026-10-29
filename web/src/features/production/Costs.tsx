@@ -1,7 +1,7 @@
 import type { Costs as CostSummary, GenerationBudget } from "./api";
 import { providerLabel, SPEND_KINDS } from "./labels";
 import { Bar, InlineError, Missing, SectionHead, SkeletonLines } from "./parts";
-import { hm, nextUtcMidnight, usd } from "./units";
+import { due, nextUtcMidnight, usd } from "./units";
 
 type Row = { id: string; label: string; today: number | null; month: number };
 
@@ -134,7 +134,7 @@ export function Costs({
         <p className="prod-note">
           {nothing && simulated ? "Rien n'est dépensé en démo : Claude et les générateurs sont simulés. " : ""}
           Plafonds : {usd(caps.daily_usd)} par jour, {usd(caps.daily_usd_per_app)} par jour et par app,{" "}
-          {usd(caps.monthly_usd)} par mois. Le compteur du jour repart à zéro à {hm(nextUtcMidnight(now))} (minuit UTC).
+          {usd(caps.monthly_usd)} par mois. Le compteur du jour repart à zéro à minuit UTC, {due(nextUtcMidnight(now), now)}.
         </p>
       </>
     );

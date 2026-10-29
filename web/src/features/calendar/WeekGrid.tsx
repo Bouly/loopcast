@@ -1,8 +1,8 @@
-import { memo, useMemo } from "react";
+import { memo, useContext, useMemo } from "react";
 import type { Account, Calendar, CalendarAccount, Post } from "./api";
 import { shortDate, weekDays, weekdayShort } from "./dates";
 import { accountDetail, accountTitle, capitalize as cap, platformName, postProblem, sortAccounts, viewsLabel } from "./model";
-import { AccountStateTag, PlatformIcon, PostState, Thumb } from "./parts";
+import { AccountStateTag, FormatTitleContext, PlatformIcon, PostState, postTitle, Thumb } from "./parts";
 
 export type OpenAccount = (accountId: string, postId?: number) => void;
 
@@ -133,16 +133,20 @@ export function AccountButton({
 
 export function PostChip({ post, onOpen }: { post: Post; onOpen: () => void }) {
   const problem = postProblem(post);
+  const formatTitle = useContext(FormatTitleContext);
+  const title = postTitle(post);
+  const format = formatTitle(post.format);
   return (
     <button
       type="button"
       className={`cal-post${post.status === "skipped" ? " is-off" : ""}`}
       onClick={onOpen}
-      title={[post.format ? `Format ${post.format}` : "", problem].filter(Boolean).join(". ") || undefined}
+      title={[format ? `${title} (${format})` : title, problem].filter(Boolean).join(". ")}
     >
       <Thumb contentId={post.content_id} />
       <span className="cal-post-text">
         <span className="cal-post-time">{post.local_time ?? "--:--"}</span>
+        <span className="cal-post-title">{title}</span>
         <PostState post={post} />
         {post.status === "posted" && post.views !== null && <span className="cal-post-views">{viewsLabel(post.views, true)}</span>}
       </span>

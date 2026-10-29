@@ -1,11 +1,11 @@
 import { Alert02Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, Video01Icon } from "@hugeicons/core-free-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ago } from "../../format";
+import { ago, videoTitle } from "../../format";
 import { useLive } from "../../live";
 import { Icon } from "../../ui";
 import { phoneOf, reviewApi, type ContentDetail, type ContentItem } from "./api";
 import { Details } from "./Details";
-import { captionLine, quote } from "./labels";
+import { quote } from "./labels";
 import { Player } from "./Player";
 import { RejectPicker } from "./RejectPicker";
 import type { Lookups } from "./useLookups";
@@ -25,11 +25,25 @@ function DecisionState({ item }: { item: ContentItem }) {
   );
 }
 
-/** Les décisions récentes : de quoi retrouver une vidéo gardée ou jetée, et revenir dessus si besoin. */
-export function History({ lookups, notify }: { lookups: Lookups; notify: Notify }) {
+/**
+ * Les décisions récentes : de quoi retrouver une vidéo gardée ou jetée, et revenir dessus si besoin. La vidéo
+ * ouverte vit dans l'adresse (`video`) : une idée ou un post du calendrier y mènent directement.
+ */
+export function History({
+  lookups,
+  notify,
+  openId,
+  onOpen,
+}: {
+  lookups: Lookups;
+  notify: Notify;
+  openId: string | null;
+  onOpen: (id: string | null) => void;
+}) {
   const [items, setItems] = useState<ContentItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  /** La vidéo demandée par un lien quand elle n'est plus dans les 40 dernières décisions. */
+  const [extra, setExtra] = useState<ContentItem | null>(null);
   const timer = useRef<number | null>(null);
 
   const load = useCallback(async () => {
@@ -58,7 +72,26 @@ export function History({ lookups, notify }: { lookups: Lookups; notify: Notify 
   useLive("content", later);
   useLive("open", later);
 
-  const open = items?.find((c) => c.id === openId) ?? null;
+  const listed = Boolean(openId && items?.some((c) => c.id === openId));
+  const ready = items !== null;
+  const extraId = extra?.id;
+  useEffect(() => {
+    if (!openId || listed || !ready || extraId === openId) return;
+    let alive = true;
+    reviewApi.detail(openId).then(
+      (d) => alive && setExtra(d),
+      (e) => {
+        if (!alive) return;
+        notify({ tone: "error", message: `Vidéo introuvable : ${(e as Error).message}.` });
+        onOpen(null);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [openId, listed, ready, extraId, notify, onOpen]);
+
+  const open = items?.find((c) => c.id === openId) ?? (extra && extra.id === openId ? extra : null);
 
   return (
     <>
@@ -73,11 +106,11 @@ export function History({ lookups, notify }: { lookups: Lookups; notify: Notify 
           </div>
         </div>
       )}
-      <div className="table rv-history" role="table" aria-label="Vidéos décidées récemment">
-        <div className="thead rv-hrow" role="row">
-          <span role="columnheader">Vidéo</span>
-          <span role="columnheader">Décision</span>
-          <span role="columnheader">Quand</span>
+      <div className="table rv-history">
+        <div className="thead rv-hrow" aria-hidden>
+          <span>Vidéo</span>
+          <span>Décision</span>
+          <span>Quand</span>
           <span />
         </div>
         {items === null &&
@@ -91,40 +124,50 @@ export function History({ lookups, notify }: { lookups: Lookups; notify: Notify 
               <span className="skeleton" style={{ width: 80, height: 12 }} />
             </div>
           ))}
-        {items?.map((c) => {
-          const phone = phoneOf(c.account_id);
-          const handle = c.account_id ? lookups.account(c.account_id)?.handle : undefined;
-          return (
-            <button key={c.id} className="row rv-hrow" role="row" onClick={() => setOpenId(c.id)} aria-selected={c.id === openId}>
-              <span className="who" role="cell">
-                {c.poster ? (
-                  <img className="mini rv-mini" src={c.poster} alt="" loading="lazy" decoding="async" />
-                ) : (
-                  <span className="mini rv-mini empty" />
-                )}
-                <span className="who-text">
-                  <span className="name rv-ellipsis">{captionLine(c)}</span>
-                  <span className="sub">
-                    {lookups.formatTitle(c.format)}
-                    {phone ? `, ${phone}` : ""}
-                    {handle ? ` (${handle})` : ""}
-                  </span>
-                </span>
-              </span>
-              <span role="cell" className="rv-hstate">
-                <DecisionState item={c} />
-                {c.status === "rejected" && c.review_note && <span className="problem rv-ellipsis">{c.review_note}</span>}
-                <span className="problem rv-hwhen-narrow">{ago(decidedAt(c))}</span>
-              </span>
-              <span role="cell" className="muted rv-hwhen">
-                {ago(decidedAt(c))}
-              </span>
-              <span className="chev" aria-hidden>
-                <Icon icon={ArrowRight01Icon} />
-              </span>
-            </button>
-          );
-        })}
+        {items && items.length > 0 && (
+          <ul className="rv-hlist" aria-label="Vidéos décidées récemment">
+            {items.map((c) => {
+              const phone = phoneOf(c.account_id);
+              const handle = c.account_id ? lookups.account(c.account_id)?.handle : undefined;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    className="row rv-hrow"
+                    onClick={() => onOpen(c.id)}
+                    aria-haspopup="dialog"
+                    aria-current={c.id === openId ? "true" : undefined}
+                  >
+                    <span className="who">
+                      {c.poster ? (
+                        <img className="mini rv-mini" src={c.poster} alt="" loading="lazy" decoding="async" />
+                      ) : (
+                        <span className="mini rv-mini empty" />
+                      )}
+                      <span className="who-text">
+                        <span className="name rv-ellipsis">{videoTitle(c)}</span>
+                        <span className="sub">
+                          {lookups.formatTitle(c.format)}
+                          {phone ? `, ${phone}` : ""}
+                          {handle ? ` (${handle})` : ""}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="rv-hstate">
+                      <DecisionState item={c} />
+                      {c.status === "rejected" && c.review_note && <span className="problem rv-ellipsis">{c.review_note}</span>}
+                      <span className="problem rv-hwhen-narrow">{ago(decidedAt(c))}</span>
+                    </span>
+                    <span className="muted rv-hwhen">{ago(decidedAt(c))}</span>
+                    <span className="chev" aria-hidden>
+                      <Icon icon={ArrowRight01Icon} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         {items?.length === 0 && (
           <div className="empty-state">
             <Icon icon={Video01Icon} size={28} />
@@ -140,7 +183,7 @@ export function History({ lookups, notify }: { lookups: Lookups; notify: Notify 
           item={open}
           lookups={lookups}
           notify={notify}
-          onClose={() => setOpenId(null)}
+          onClose={() => onOpen(null)}
           onChanged={() => void load()}
         />
       )}
@@ -225,10 +268,10 @@ function HistoryDrawer({
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <aside className="drawer rv-drawer" role="dialog" aria-modal="true" aria-label={captionLine(item)}>
+      <aside className="drawer rv-drawer" role="dialog" aria-modal="true" aria-label={videoTitle(item)}>
         <header className="drawer-head">
           <div className="rv-drawer-title">
-            <h2 className="rv-ellipsis">{captionLine(item)}</h2>
+            <h2 className="rv-ellipsis">{videoTitle(item)}</h2>
             <div className="sub">{lookups.formatTitle(item.format)}</div>
           </div>
           <div className="head-actions">
@@ -239,7 +282,7 @@ function HistoryDrawer({
         </header>
         <div className="drawer-body">
           <div>
-            <Player item={item} muted={muted} onMuted={setMuted} label={captionLine(item)} />
+            <Player item={item} muted={muted} onMuted={setMuted} label={videoTitle(item)} />
           </div>
           <Details
             item={item}
@@ -256,7 +299,7 @@ function HistoryDrawer({
             onRelaunch={
               item.status === "rejected"
                 ? (regenerate) =>
-                    void act("Production relancée : la vidéo reviendra dans la file une fois prête.", () =>
+                    void act("Production relancée : la vidéo reviendra dans la file une fois rendue.", () =>
                       reviewApi.retry(item.id, regenerate),
                     )
                 : undefined

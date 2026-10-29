@@ -39,6 +39,8 @@ function useLiveReload(load: () => Promise<void>): () => void {
   );
 
   useLive("diffusion", schedule);
+  // Une vidéo validée ou jetée : le stock prêt à publier et le nombre « à valider » de chaque compte bougent.
+  useLive("content", schedule);
   // « open » arrive aussi juste après le premier chargement : inutile de tout redemander tout de suite.
   useLive("open", () => Date.now() - last.current > 2000 && schedule());
 

@@ -89,6 +89,12 @@ export function teamTodo(app: AppOverview, analysisError: string | null, strateg
   if (strategy.running) return { text: "Stratégie en préparation", tone: "info" };
   if (app.status === "strategy_ready") return { text: "Stratégie à approuver", tone: "warn" };
   if (app.status === "brief_ready") return { text: "Stratégie en attente", tone: "idle" };
+  // Plus loin dans le parcours, ce qui attend encore l'équipe : idées à relire, vidéos à valider.
+  const waiting = [
+    app.counts.ideas_proposed > 0 ? plural(app.counts.ideas_proposed, "idée à relire", "idées à relire") : "",
+    app.counts.to_review > 0 ? plural(app.counts.to_review, "vidéo à valider", "vidéos à valider") : "",
+  ].filter(Boolean);
+  if (waiting.length) return { text: waiting.join(", "), tone: "warn" };
   return null;
 }
 

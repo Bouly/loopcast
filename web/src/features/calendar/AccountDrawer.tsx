@@ -1,5 +1,8 @@
 import { Alert02Icon, Cancel01Icon, PauseIcon, PlayIcon } from "@hugeicons/core-free-icons";
-import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from "react";
+import { useContext, useEffect, useId, useRef, useState, type FormEvent, type Ref } from "react";
+import { validationLink } from "../../links";
+import { Link } from "../../router";
+import { toast } from "../../toast";
 import { Icon } from "../../ui";
 import { diffusion, errorText, type Account, type Post } from "./api";
 import { daysBetween, shortDate, whenLabel, yearOf } from "./dates";
@@ -16,7 +19,7 @@ import {
   plural,
   postProblem,
 } from "./model";
-import { AccountStateTag, PlatformIcon, PostState, Thumb } from "./parts";
+import { AccountStateTag, FormatTitleContext, PlatformIcon, PostState, postTitle, Thumb } from "./parts";
 import { useAccountDetail } from "./useCalendar";
 
 const FOCUSABLE =
@@ -178,12 +181,25 @@ function TodaySection({ account, today, timezone }: { account: Account; today: s
             </dd>
           </>
         )}
-        <dt>Vidéos prêtes</dt>
+        <dt>Prêtes à publier</dt>
         <dd>
           {account.stock > 0 ? (
-            <span className="num">{plural(account.stock, "vidéo validée", "vidéos validées")} à publier</span>
+            <span className="num">{plural(account.stock, "vidéo validée", "vidéos validées")}</span>
           ) : (
             "Aucune : les posts se planifient dès qu'une vidéo est validée pour ce compte"
+          )}
+        </dd>
+        <dt>À valider</dt>
+        <dd>
+          {(account.to_review ?? 0) > 0 ? (
+            <>
+              <span className="num">{plural(account.to_review ?? 0, "vidéo", "vidéos")}</span>{" "}
+              <Link className="cal-inline-link" to={validationLink({ app: account.app_id, phone: account.device })}>
+                Les valider
+              </Link>
+            </>
+          ) : (
+            "Aucune"
           )}
         </dd>
         <dt>Canal</dt>
@@ -238,7 +254,7 @@ function PauseSection({ account, onChanged }: { account: Account; onChanged: () 
     setMsg(null);
     try {
       await fn();
-      setMsg({ text: done });
+      toast(done);
       setOpen(false);
       onChanged();
     } catch (e) {
@@ -402,6 +418,7 @@ function DrawerPost({
 }) {
   const problem = postProblem(post);
   const when = whenLabel(post.local_date, post.local_time, today);
+  const formatTitle = useContext(FormatTitleContext);
   return (
     <li ref={itemRef} className={`cal-dpost${focus ? " is-focus" : ""}${post.status === "skipped" ? " is-off" : ""}`}>
       <Thumb contentId={post.content_id} size="md" />
@@ -411,10 +428,10 @@ function DrawerPost({
           <PostState post={post} />
           {post.winner && <span className="badge">Gagnant</span>}
         </div>
-        <div className="cal-dpost-sub">
-          <span className="mono">{post.format ?? "format inconnu"}</span>
-          <span className="mono muted">{post.content_id}</span>
-        </div>
+        <Link className="cal-dpost-title" to={validationLink({ decided: true, video: post.content_id })}>
+          {postTitle(post)}
+        </Link>
+        {formatTitle(post.format) && <div className="cal-dpost-sub">{formatTitle(post.format)}</div>}
         {problem && <div className={`cal-why${post.status === "failed" ? " is-bad" : ""}`}>{problem}</div>}
       </div>
       {post.status === "posted" && (

@@ -1,6 +1,6 @@
 import { Alert02Icon, File01Icon, HelpCircleIcon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { useId, useState, type ReactNode } from "react";
-import { dateTime } from "../../format";
+import { agoInSentence, dateTime } from "../../format";
 import { Icon } from "../../ui";
 import { appsApi, type Asset, type BriefOrigin, type BriefRow, type Lang, type ProductBrief } from "./api";
 import type { TabProps } from "./AppDetail";
@@ -443,7 +443,7 @@ function BriefEditor({
 function versionState(row: BriefRow, latest: BriefRow, approvedVersion: number | null): { text: string; cls: string } {
   if (row.approved_at) {
     return row.version === approvedVersion
-      ? { text: `Approuvée le ${dateTime(row.approved_at)}`, cls: "ok" }
+      ? { text: `Approuvée ${agoInSentence(row.approved_at)}`, cls: "ok" }
       : { text: "Approuvée, remplacée depuis", cls: "" };
   }
   return row.version === latest.version ? { text: "À approuver", cls: "warn" } : { text: "Non approuvée, remplacée", cls: "" };
@@ -529,7 +529,7 @@ export function BriefTab({
             <span className={`badge ${state.cls}`}>{state.text}</span>
           </div>
           <p className="muted">
-            {ORIGIN[shown.origin] ?? "Version"}, le {dateTime(shown.created_at)}
+            {ORIGIN[shown.origin] ?? "Version"}, {agoInSentence(shown.created_at)}
           </p>
         </div>
         <Confidence value={shown.brief.confidence ?? 0} />

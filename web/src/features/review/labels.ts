@@ -47,12 +47,6 @@ export const REASONS = [
 
 export const hasAiLabel = (item: Pick<ContentItem, "ai_label">) => Boolean(item.ai_label);
 
-/** La première ligne de la légende : de quoi reconnaître une vidéo dans une liste. */
-export function captionLine(item: Pick<ContentItem, "caption" | "id">): string {
-  const line = (item.caption ?? "").split("\n").find((l) => l.trim());
-  return line?.trim() || item.id;
-}
-
 /** Hashtags tapés à la main (« #routine, soir ») → « #routine #soir » sans doublon. */
 export function parseTags(text: string): string[] {
   const out: string[] = [];

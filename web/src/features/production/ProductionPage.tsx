@@ -8,11 +8,12 @@ import { Failures } from "./Failures";
 import { Generators } from "./Generators";
 import { familyLabel } from "./labels";
 import { deadFirst, families, nextJob, retrying, stalled, totals } from "./model";
-import { Toast, useNow, useToast } from "./parts";
+import { toast } from "../../toast";
+import { useNow } from "./parts";
 import "./production.css";
 import { Queue } from "./Queue";
 import { Summary } from "./Summary";
-import { capitalize, count, due, hm, nextUtcMidnight, plural } from "./units";
+import { agoInSentence, capitalize, count, due, nextUtcMidnight, plural } from "./units";
 import { useProduction, type Verb } from "./useProduction";
 import { Videos } from "./Videos";
 
@@ -24,7 +25,6 @@ export function ProductionPage() {
   const p = useProduction();
   const { snap, loaded } = p;
   const now = useNow(15_000, p.loadedAt);
-  const { toast, show } = useToast();
 
   const apps = useMemo(() => new Map((snap.apps.data ?? []).map((a) => [a.id, a.name])), [snap.apps.data]);
   const stats = snap.stats.data;
@@ -64,8 +64,8 @@ export function ProductionPage() {
     const label = `Tâche « ${familyLabel(job.kind)} »`;
     const error = await p.act(job, verb);
     if (error === null)
-      show(verb === "retry" ? `${label} relancée : elle repart dans la file.` : `${label} annulée : elle ne sera pas relancée.`);
-    else show(`${verb === "retry" ? "Relance" : "Annulation"} impossible : ${error}.`, "bad");
+      toast(verb === "retry" ? `${label} relancée : elle repart dans la file.` : `${label} annulée : elle ne sera pas relancée.`);
+    else toast(`${verb === "retry" ? "Relance" : "Annulation"} impossible : ${error}.`, { tone: "error" });
     return error === null;
   };
 
@@ -75,7 +75,7 @@ export function ProductionPage() {
         <div>
           <h1>Production</h1>
           <p>{verdict}</p>
-          {p.loadedAt && <p className="prod-fresh">Mis à jour à {hm(new Date(p.loadedAt))}</p>}
+          {p.loadedAt && <p className="prod-fresh">Mis à jour {agoInSentence(new Date(p.loadedAt).toISOString(), now)}</p>}
         </div>
         <div className="actions">
           <button className="btn" onClick={() => void p.refresh()} disabled={p.refreshing}>
@@ -98,7 +98,7 @@ export function ProductionPage() {
             <span className="muted">
               {snap.stats.error === UNREACHABLE ? "" : `${capitalize(snap.stats.error)}. `}
               {p.loadedAt
-                ? `Les chiffres affichés datent de ${hm(new Date(p.loadedAt))}.`
+                ? `Dernière lecture réussie ${agoInSentence(new Date(p.loadedAt).toISOString(), now)}.`
                 : "Vérifiez que le serveur tourne sur le Mac (python -m loopcast serve), puis actualisez."}
             </span>
           </div>
@@ -167,7 +167,6 @@ export function ProductionPage() {
         </>
       )}
 
-      <Toast toast={toast} />
     </main>
   );
 }

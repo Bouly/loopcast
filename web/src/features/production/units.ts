@@ -1,4 +1,4 @@
-import { ago, dateTime } from "../../format";
+import { agoInSentence as sentenceAgo, inFuture } from "../../format";
 
 const money = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const whole = new Intl.NumberFormat("fr-FR");
@@ -43,26 +43,12 @@ export function nextUtcMonth(now: number): string {
 const pad = (n: number) => String(n).padStart(2, "0");
 const NBSP = "\u00a0"; // un nombre ne se sépare jamais de son unité en fin de ligne
 
-/** « 14 h 05 » (heure locale). */
-export function hm(iso: string | Date): string {
-  const d = typeof iso === "string" ? new Date(iso) : iso;
-  return `${d.getHours()}${NBSP}h${NBSP}${pad(d.getMinutes())}`;
-}
-
-function sameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-/** Une échéance à venir, pour une phrase : « dans 3 min », « à 14 h 30 », « demain à 1 h 00 », « le 2 nov. à 1 h 00 ». */
+/**
+ * Une échéance à venir, pour une phrase : « dans 3 min », « dans 2 h 15 », « dans 3 jours ». Toujours relative :
+ * une heure du Mac lue depuis un navigateur dans un autre fuseau contredirait le calendrier (src/format.ts).
+ */
 export function due(iso: string, now: number): string {
-  const d = new Date(iso);
-  const s = (d.getTime() - now) / 1000;
-  if (s < 60) return "dans moins d'une minute";
-  if (s < 3600) return `dans ${Math.round(s / 60)}${NBSP}min`;
-  if (sameDay(d, new Date(now))) return `à ${hm(d)}`;
-  if (sameDay(d, new Date(now + 86_400_000))) return `demain à ${hm(d)}`;
-  // « 1er nov. à 7 h 00 » : le format de la ferme, le premier du mois et l'heure insécable en plus.
-  return `le ${dateTime(iso).replace(/^1 /, "1er ").replace(/ (\d{1,2}) h (\d{2})$/, ` $1${NBSP}h${NBSP}$2`)}`;
+  return inFuture(iso, now);
 }
 
 /** Une durée écoulée : « 40 s », « 12 min », « 2 h 05 », « 3 j ». */
@@ -76,7 +62,5 @@ export function elapsed(iso: string, now: number): string {
 
 /** « il y a 4 min », « à l'instant », « le 29 oct. à 4 h 27 », pour une phrase. */
 export function agoInSentence(iso: string | null | undefined, now: number): string {
-  const text = ago(iso, now);
-  if (/^\d/.test(text)) return `le ${text}`;
-  return text.charAt(0).toLowerCase() + text.slice(1);
+  return sentenceAgo(iso, now);
 }

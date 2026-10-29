@@ -8,7 +8,6 @@ import {
   type Asset,
   type BrandFile,
   type BriefRow,
-  type FormatInfo,
   type IdeaRow,
   type Job,
   type QuestionRow,
@@ -130,6 +129,7 @@ export function useAppsList() {
   useLive("open", () => Date.now() - last.current.at > 2000 && void reload());
   useLive("apps", schedule);
   useLive("strategy", schedule);
+  useLive("content", schedule); // une vidéo validée ou jetée : « N vidéos à valider » bouge
 
   const busy = apps.some((a) => a.jobs.pending.length > 0) || jobs.some((j) => j.kind === "strategy.generate" && RUNNING(j));
   usePollWhile(busy, reload);
@@ -252,6 +252,10 @@ export function useAppDetail(id: string) {
   useLive("strategy", (d: { app_id?: string; idea_id?: string }) => {
     if (d?.app_id === id || (d?.idea_id && ideaOfThisApp(d.idea_id))) scheduleStrategy();
   });
+  // Une vidéo de l'app décidée (son id est celui de son idée), un post planifié ou publié : le stock, l'état des
+  // idées produites et leurs liens vers la validation et le calendrier suivent.
+  useLive("content", (d: { id?: string }) => d?.id && ideaOfThisApp(d.id) && scheduleStrategy());
+  useLive("diffusion", () => scheduleStrategy());
 
   const { overview, strategy, jobs } = data;
   const appsBusy = (overview?.jobs.pending.length ?? 0) > 0;
@@ -271,25 +275,6 @@ export function useAppDetail(id: string) {
   return { data, error, notFound, reload };
 }
 
-// --- Catalogue des formats (une fois par session) -----------------------------------------------------------
+// --- Catalogue des formats : celui de toute l'app (chargé une fois par session) ------------------------------
 
-let formatsCache: Promise<FormatInfo[]> | null = null;
-
-export function useFormats(): Record<string, FormatInfo> {
-  const [formats, setFormats] = useState<Record<string, FormatInfo>>({});
-  useEffect(() => {
-    formatsCache ??= strategyApi.formats().catch((e) => {
-      formatsCache = null;
-      throw e;
-    });
-    let alive = true;
-    formatsCache.then(
-      (list) => alive && setFormats(Object.fromEntries(list.map((f) => [f.id, f]))),
-      () => {},
-    );
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return formats;
-}
+export { useFormats } from "../../formats";

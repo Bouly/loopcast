@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { videoTitle } from "../../format";
 import { useLive } from "../../live";
+import { dismissToast, toast } from "../../toast";
 import { isNetworkError, reviewApi, type ContentDetail, type ContentItem, type Stats } from "./api";
-import { captionLine, clip, quote } from "./labels";
+import { clip, quote } from "./labels";
 
 /** Une décision sur la vidéo affichée. Elle part au serveur après le délai d'annulation. */
 export type Decision =
@@ -34,9 +36,9 @@ function done(decision: Decision): string {
 
 const verb = (d: Decision) => (d.kind === "approve" ? "gardée" : d.kind === "reject" ? "jetée" : "relancée");
 
-/** Le nom d'une vidéo dans un message : son accroche (ce qu'on voit à l'écran), sinon sa légende. */
+/** Le nom d'une vidéo dans un message : son titre de partout (l'accroche), sinon sa légende. */
 export const titleOf = (item: ContentItem, detail?: ContentDetail) =>
-  quote(clip(detail?.idea?.hook || captionLine(item)));
+  quote(clip(videoTitle({ ...item, hook: item.hook || detail?.idea?.hook })));
 
 /**
  * La file de validation, tenue à jour en direct :
@@ -52,7 +54,6 @@ export function useReview(options: { onGone?: (item: ContentItem, status: string
   const [stats, setStats] = useState<Stats | null>(null);
   const [details, setDetails] = useState<Record<string, ContentDetail>>({});
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
-  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const queueRef = useRef(queue);
   queueRef.current = queue;
@@ -66,16 +67,14 @@ export function useReview(options: { onGone?: (item: ContentItem, status: string
   const inflight = useRef(new Set<string>());
   const statsSig = useRef("");
   const reloadTimer = useRef<number | null>(null);
-  const toastSeq = useRef(0);
 
-  // --- Notifications ---------------------------------------------------------------------------------
+  // --- Notifications : celles de toute l'app (toast.tsx), une absence de durée = à fermer soi-même -------------
 
-  const dismiss = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), []);
-  const notify = useCallback((toast: Omit<Toast, "id">) => {
-    const id = ++toastSeq.current;
-    setToasts((list) => [...list, { ...toast, id }].slice(-3));
-    return id;
-  }, []);
+  const dismiss = useCallback((id: number) => dismissToast(id), []);
+  const notify = useCallback(
+    (t: Omit<Toast, "id">) => toast(t.message, { tone: t.tone, action: t.action, ms: t.ms ?? null }),
+    [],
+  );
 
   // --- Chargement ------------------------------------------------------------------------------------
 
@@ -260,7 +259,6 @@ export function useReview(options: { onGone?: (item: ContentItem, status: string
     stats,
     details,
     detailErrors,
-    toasts,
     reload,
     ensureDetail,
     decide,

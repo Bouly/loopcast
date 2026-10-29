@@ -1,4 +1,5 @@
 /** Libellés, états et textes de la section Calendrier (aucun appel réseau ici). */
+import { broadcastClock, NBSP } from "../../format";
 import type { Account, AccountState, Post, PostStatus, Status, TickReport } from "./api";
 import { addDays, clockIn, shortDate, todayIn, yearOf } from "./dates";
 
@@ -59,9 +60,9 @@ export function pauseUntil(a: Account, timezone: string, today: string | null): 
   if (!a.paused_until || Number(a.paused_until.slice(0, 4)) >= 9000) return "Jusqu'à la reprise";
   const day = todayIn(timezone, Date.parse(a.paused_until));
   const time = clockIn(a.paused_until, timezone);
-  if (day === today) return `Jusqu'à ${time}`;
+  if (day === today) return `Jusqu'à${NBSP}${time}`;
   if (today && day === addDays(today, 1)) return `Jusqu'à demain ${time}`;
-  return `Jusqu'au ${shortDate(day, today ? yearOf(today) : undefined)} à ${time}`;
+  return `Jusqu'au ${shortDate(day, today ? yearOf(today) : undefined)} à${NBSP}${time}`;
 }
 
 /** La ligne sous l'état d'un compte : son rythme, ou ce qui l'empêche de publier. */
@@ -78,7 +79,11 @@ export function accountDetail(a: Account | undefined, today: string | null, time
     case "ramping":
     case "slowed": {
       const quota = a.quota ?? 0;
-      if (a.stock === 0 && quota > 0) return { text: "Plus aucune vidéo prête", warn: true };
+      if (a.stock === 0 && quota > 0) {
+        // Les mots de la validation : une vidéo « à valider » n'est pas encore « prête à publier ».
+        const review = a.to_review ?? 0;
+        return { text: `Aucune vidéo prête à publier${review > 0 ? ` (${review} à valider)` : ""}`, warn: true };
+      }
       const target = a.target !== null && a.target !== quota ? ` (cible ${a.target})` : "";
       return { text: `${plural(quota, "post", "posts")} par jour${target}`, warn: false };
     }
@@ -178,15 +183,15 @@ export function autopilotHealth(status: Status): { text: string; tone?: "warn" |
   const late = Date.parse(status.now) - Date.parse(status.next_tick);
   if (late > 5 * 60_000) {
     return {
-      text: `L'autopilote est en retard : le tour prévu à ${clockIn(status.next_tick, tz)} n'a pas encore tourné. La file de tâches est peut-être arrêtée.`,
+      text: `L'autopilote est en retard : le tour prévu à${NBSP}${broadcastClock(status.next_tick, tz)} n'a pas encore tourné. La file de tâches est peut-être arrêtée.`,
       tone: "warn",
     };
   }
-  return { text: `Prochain tour de l'autopilote à ${clockIn(status.next_tick, tz)}.` };
+  return { text: `Prochain tour de l'autopilote à${NBSP}${broadcastClock(status.next_tick, tz)}.` };
 }
 
-/** Le compte rendu d'un tour lancé à la main. */
-export function tickSummary(r: TickReport, timezone: string): { text: string; err: boolean } {
+/** Le compte rendu d'un tour lancé à la main (une notification : il vient de se terminer, inutile d'en dire l'heure). */
+export function tickSummary(r: TickReport): { text: string; err: boolean } {
   const plans = r.plan ?? [];
   const planned = plans.reduce((n, p) => n + p.planned.length, 0);
   const missing = plans.reduce((n, p) => n + p.missing, 0);
@@ -196,7 +201,7 @@ export function tickSummary(r: TickReport, timezone: string): { text: string; er
   if (planned) done.push(plural(planned, "post planifié", "posts planifiés"));
   if (due) done.push(`${plural(due, "post envoyé", "posts envoyés")} à la publication`);
   if (trimmed) done.push(`${plural(trimmed, "post annulé", "posts annulés")} (quota réduit)`);
-  let text = `Tour terminé à ${clockIn(r.at, timezone)} : ${done.length ? done.join(", ") : "rien de nouveau à planifier"}.`;
+  let text = `Tour terminé : ${done.length ? done.join(", ") : "rien de nouveau à planifier"}.`;
   if (missing) {
     const noStock = plans.some((p) => p.missing > 0 && p.reason.startsWith("pas assez"));
     text += ` ${plural(missing, "créneau reste vide", "créneaux restent vides")}${noStock ? " faute de vidéo validée" : ""}.`;

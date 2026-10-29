@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Account, Calendar, Post } from "./api";
 import { dayOfMonth, longDate, weekDays, weekdayShort, yearOf } from "./dates";
 import { capitalize, plural, postProblem, sortAccounts, viewsLabel } from "./model";
-import { PostState, Thumb } from "./parts";
+import { PostState, postTitle, Thumb } from "./parts";
 import { AccountButton, type OpenAccount } from "./WeekGrid";
 
 const counted = (posts: Post[] | undefined) => (posts ?? []).filter((p) => p.status !== "skipped").length;
@@ -96,6 +96,7 @@ function PostLine({ post, onOpen }: { post: Post; onOpen: () => void }) {
           <PostState post={post} />
           {post.status === "posted" && post.views !== null && <span className="cal-line-views">{viewsLabel(post.views)}</span>}
         </span>
+        <span className="cal-line-title">{postTitle(post)}</span>
         {problem && <span className={`cal-why${post.status === "failed" ? " is-bad" : ""}`}>{problem}</span>}
       </span>
     </button>

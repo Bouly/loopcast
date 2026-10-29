@@ -119,6 +119,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .btn.primary:active:not(:disabled) { background: var(--brand-active); }
 .btn.ghost { background: transparent; border-color: transparent; box-shadow: none; }
 .btn.ghost:hover:not(:disabled) { background: var(--muted); }
+/* Un lien qui a l'air d'un bouton (vers une autre section) : couleur et soulignement du bouton */
+a.btn { color: var(--foreground); text-decoration: none; }
+a.btn.primary { color: var(--brand-foreground); }
 .btn.sm { height: 28px; padding: 0 9px; }
 .btn.icon { width: 30px; padding: 0; }
 .btn.sm.icon { width: 28px; }
@@ -456,6 +459,103 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .problems-list li { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
 .problems-list .ic-warn { color: var(--warn); flex: none; margin-top: 1px; }
 .problems-list .ic-bad { color: var(--destructive); flex: none; margin-top: 1px; }
+
+/* ---------- Notifications : en bas au centre, sombres, 3,5 s, l'icône dit l'état (toast.tsx) ---------- */
+
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  max-width: 560px;
+  padding: 6px 14px;
+  border-radius: var(--r-lg);
+  background: var(--foreground);
+  color: var(--brand-foreground);
+  box-shadow: var(--pop-shadow);
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: auto;
+  animation: toast-in 160ms var(--ease);
+}
+.toast:has(.toast-btn) { padding-right: 6px; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } }
+.toast-ic { flex: none; }
+.toast.done .toast-ic { color: var(--ok-border); }
+.toast.error .toast-ic { color: var(--destructive-border); }
+.toast.info .toast-ic { color: var(--info-border); }
+.toast-msg { padding: 4px 0; line-height: 1.4; overflow-wrap: anywhere; }
+.toast-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--brand-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+.toast-btn:hover { background: color-mix(in srgb, var(--brand-foreground) 12%, transparent); }
+.toast-btn:focus-visible { outline: 2px solid var(--brand-foreground); outline-offset: 1px; }
+.toast-btn.icon { width: 28px; padding: 0; justify-content: center; }
+.toast-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--r-xs);
+  border: 1px solid color-mix(in srgb, var(--brand-foreground) 30%, transparent);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: color-mix(in srgb, var(--brand-foreground) 72%, transparent);
+}
+
+/* ---------- Au doigt (doctrine) : rien ne change à l'écran, seule la zone qu'on touche grandit ---------- */
+
+/* Un texte qui ne vaut qu'à la souris (glisser, ⌘V) ou qu'au doigt : `.on-touch` ne s'affiche que sur écran tactile. */
+.on-touch { display: none; }
+
+@media (pointer: coarse) {
+  .on-touch { display: revert; }
+  .off-touch, .toast-kbd { display: none; }
+  /* Safari zoome sur un champ écrit sous 16 px : les champs passent à 16 px au doigt. */
+  input.field, textarea.field, select.field { font-size: 16px; }
+  /* Chaque contrôle compact (26 à 32 px) reçoit une zone tactile d'au moins 44 × 44 px, centrée sur lui.
+     :where() garde une spécificité nulle : un contrôle déjà positionné par sa section le reste. */
+  :where(.btn, .seg button, .toast-btn, .tap) { position: relative; }
+  :where(.btn, .seg button, .toast-btn, .tap)::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
 
 /* ---------- Écrans étroits ---------- */
 
