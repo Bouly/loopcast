@@ -406,3 +406,27 @@ def test_permanent_can_keep_a_result(jconn, clock):
         jobs.run_one(jconn, None, "w", clock=clock)
         row = jconn.execute("SELECT status, result FROM jobs WHERE id=?", (jid,)).fetchone()
         assert row["status"] == "dead" and json.loads(row["result"]) == {"handle": None, "tried": ["a", "b"]}
+
+
+def test_listeners_hear_every_job_outcome(jconn, clock):
+    heard = []
+    remove = jobs.add_listener(lambda job, status: heard.append((job.kind, status)))
+
+    def boom(ctx, p):
+        raise ValueError("raté")
+
+    def broken_listener(job, status):
+        raise RuntimeError("écouteur en panne")
+
+    remove_broken = jobs.add_listener(broken_listener)
+    try:
+        with handlers(t_ok=(lambda ctx, p: None, {}), t_boom=(boom, {"max_attempts": 1})):
+            jobs.enqueue(jconn, "t.ok", clock=clock)
+            jobs.enqueue(jconn, "t.boom", clock=clock)
+            jobs.run_one(jconn, None, "w", clock=clock)
+            jobs.run_one(jconn, None, "w", clock=clock)
+        assert heard == [("t.ok", "done"), ("t.boom", "dead")]       # l'écouteur en panne n'a rien empêché
+    finally:
+        remove()
+        remove_broken()
+    assert jobs.LISTENERS == []

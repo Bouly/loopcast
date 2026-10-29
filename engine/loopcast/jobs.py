@@ -309,7 +309,33 @@ def run_one(conn: sqlite3.Connection, config: Any, worker: str, *, clock: Clock 
         _rollback(conn)
         log.warning("tâche %s #%s en échec : %s", job.kind, job.id, e)
         fail(conn, job, f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=6)}", clock=clock)
+    _notify_listeners(conn, job)
     return job
+
+
+# --- Écouteurs : prévenir le dashboard quand une tâche change d'état ------------------------------------
+
+Listener = Callable[[Job, str], None]
+LISTENERS: list[Listener] = []
+
+
+def add_listener(fn: Listener) -> Callable[[], None]:
+    """`fn(job, status)` est appelé après chaque passage d'une tâche (done, queued, dead). Renvoie de quoi le retirer.
+    L'API s'en sert pour pousser l'événement en direct au front (une tâche de fond n'a pas accès au bus)."""
+    LISTENERS.append(fn)
+    return lambda: LISTENERS.remove(fn) if fn in LISTENERS else None
+
+
+def _notify_listeners(conn: sqlite3.Connection, job: Job) -> None:
+    if not LISTENERS:
+        return
+    row = conn.execute("SELECT status FROM jobs WHERE id=?", (job.id,)).fetchone()
+    status = row["status"] if row else "unknown"
+    for fn in list(LISTENERS):
+        try:
+            fn(job, status)
+        except Exception:  # noqa: BLE001 : un écouteur en panne ne doit pas gêner la file
+            log.exception("écouteur de tâches en échec (%s #%s)", job.kind, job.id)
 
 
 def _rollback(conn: sqlite3.Connection) -> None:
