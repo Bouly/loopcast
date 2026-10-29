@@ -1,6 +1,6 @@
 import { Shield01Icon, Target02Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState, type ReactNode } from "react";
-import { agoInSentence, dateTime } from "../../format";
+import { ago, agoInSentence } from "../../format";
 import { Icon } from "../../ui";
 import type { Lang, StrategyRecord } from "./api";
 import type { TabProps } from "./AppDetail";
@@ -395,7 +395,7 @@ export function StrategyTab({
                     <li key={v.id}>
                       <span className="ax-strong">v{v.version}</span>
                       <span className={`badge ${vs.cls}`}>{v.status === "approved" ? "En vigueur" : vs.text}</span>
-                      <span className="muted ax-versions-date">{dateTime(v.created_at)}</span>
+                      <span className="muted ax-versions-date">{ago(v.created_at)}</span>
                       {vn.instruction && <span className="ax-versions-note muted">Consigne : {vn.instruction}</span>}
                     </li>
                   );

@@ -1,6 +1,6 @@
 import { ArrowDown01Icon, CheckmarkCircle02Icon, MessageQuestionIcon } from "@hugeicons/core-free-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { dateTime } from "../../format";
+import { ago } from "../../format";
 import { Icon } from "../../ui";
 import { appsApi, type QuestionRow } from "./api";
 import type { TabProps } from "./AppDetail";
@@ -170,7 +170,7 @@ function History({ closed }: { closed: QuestionRow[] }) {
                 <dt>{q.question}</dt>
                 <dd className={q.status === "skipped" ? "muted" : undefined}>
                   {q.status === "answered" ? q.answer : "Passée"}
-                  {q.answered_at && <span className="ax-qa-date"> {dateTime(q.answered_at)}</span>}
+                  {q.answered_at && <span className="ax-qa-date"> {ago(q.answered_at)}</span>}
                 </dd>
               </div>
             ))}
