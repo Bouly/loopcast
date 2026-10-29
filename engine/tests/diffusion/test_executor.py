@@ -96,9 +96,9 @@ def test_two_retries_ten_then_thirty_minutes_then_failed(conn, cfg, clock, add_c
 
 
 def test_replanned_post_is_published(conn, cfg, settings, pubs, fake, clock, add_content):
-    """Un post annulé après que sa tâche a été enfilée (pause), puis replanifié : il part à son nouveau créneau.
-    Avant : la tâche de la première planification (terminée, elle avait vu « skipped ») avait la même clé que
-    celle de la nouvelle, jobs.enqueue la renvoyait et le post n'était plus jamais publié."""
+    """Un post annulé après que sa tâche a été enfilée (pause), puis replanifié : il part à son nouveau
+    créneau. Avant : la tâche de la première planification (terminée, elle avait vu « skipped ») avait la même
+    clé que celle de la nouvelle, jobs.enqueue la renvoyait et le post n'était plus jamais publié."""
     add_content("c1")
     pid = schedule(conn, clock, minutes=5)
     executor.enqueue_due(conn, clock())                                   # tâche enfilée pour le créneau

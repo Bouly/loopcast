@@ -48,8 +48,9 @@ def publish_key(post_id: int, attempts: int, planned_at: datetime | str | None =
 def enqueue_due(conn: sqlite3.Connection, now: datetime, horizon_minutes: int = TICK_HORIZON_MINUTES) -> list[int]:
     """Une tâche diffusion.publish par post prévu d'ici `horizon_minutes`, à l'heure de son créneau."""
     rows = conn.execute(
-        "SELECT id, attempts, scheduled_at, planned_at, app_id FROM posts WHERE status='scheduled' AND scheduled_at <= ? "
-        "ORDER BY scheduled_at, id", (iso(now + timedelta(minutes=horizon_minutes)),)).fetchall()
+        "SELECT id, attempts, scheduled_at, planned_at, app_id FROM posts "
+        "WHERE status='scheduled' AND scheduled_at <= ? ORDER BY scheduled_at, id",
+        (iso(now + timedelta(minutes=horizon_minutes)),)).fetchall()
     out = []
     for r in rows:
         when = max(parse_dt(r["scheduled_at"]), now)
@@ -195,10 +196,9 @@ def _apply(conn, s: DiffusionSettings, post_id: int, account, publisher_name: st
             update_post(conn, post_id, now,
                         f"échec (tentative {attempt}/{s.max_attempts}) : {result.log} ; nouvelle tentative à "
                         f"{again.astimezone(s.tz):%H:%M}", status="scheduled", scheduled_at=again)
-            jobs.enqueue(conn, "diffusion.publish",
-                         {"post_id": post_id, "attempt": attempt, "planned_at": iso(planned_at) if planned_at else None},
-                         key=publish_key(post_id, attempt, planned_at), app_id=account.app_id, run_after=again,
-                         clock=lambda: now)
+            payload = {"post_id": post_id, "attempt": attempt, "planned_at": iso(planned_at) if planned_at else None}
+            jobs.enqueue(conn, "diffusion.publish", payload, key=publish_key(post_id, attempt, planned_at),
+                         app_id=account.app_id, run_after=again, clock=lambda: now)
             alerts.event(conn, now, "diffusion.retry",
                          f"{account.id} : post #{post_id} en échec ({result.log}), nouvel essai dans {delay} min",
                          account.id)

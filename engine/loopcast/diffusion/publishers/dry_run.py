@@ -31,9 +31,10 @@ class DryRunPublisher:
         what = "le carrousel" if content.kind == "carousel" else "la vidéo"
         caption = (content.post_text().splitlines() or [""])[0][:120]
         files = ", ".join(p.name for p in media) or "aucun fichier"
+        channel = getattr(self.real, "name", "?")
         return PublishResult.dry_run(
             f"essai à blanc (diffusion.dry_run) : rien n'est parti. Aurait publié {what} {content.id} sur {platform} "
-            f"({account.handle or account.id}) par le canal « {getattr(self.real, 'name', '?')} » ; fichiers : {files} ; "
+            f"({account.handle or account.id}) par le canal « {channel} » ; fichiers : {files} ; "
             f"légende : « {caption} »")
 
     def fetch_metrics(self, account: Account, external_ids: list[str]) -> dict[str, Metrics]:
