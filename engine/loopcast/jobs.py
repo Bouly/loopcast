@@ -9,6 +9,8 @@
   que font les générateurs vidéo pendant qu'ils calculent.
 - Limite de tâches simultanées par famille (« video. » : 2, par exemple), pour ne pas saturer un
   fournisseur ni le budget.
+- Un chien de garde : le premier exécutant appelle modules.watchdog toutes les ~5 min, pour relancer ce
+  qui doit toujours tourner (le tick de l'autopilote) même si la chaîne a cassé.
 
 Un module déclare ses tâches avec @handler("app.analyze") ; jobs.run_worker() les exécute.
 """
@@ -21,6 +23,7 @@ import random
 import socket
 import sqlite3
 import threading
+import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -314,23 +317,47 @@ def _rollback(conn: sqlite3.Connection) -> None:
         conn.execute("ROLLBACK")
 
 
+WATCHDOG_S = 300.0              # le chien de garde des modules passe toutes les 5 min
+
+
 def run_worker(db_path: str, config: Any, stop: threading.Event, *, services: dict[str, Any] | None = None,
                threads: int = 3, poll_s: float = 2.0, limits: dict[str, int] | None = None,
-               clock: Clock = utcnow) -> list[threading.Thread]:
-    """Lance `threads` exécutants, chacun avec SA connexion SQLite. Renvoie les threads."""
+               clock: Clock = utcnow, watchdog_s: float = WATCHDOG_S,
+               watchdog: Callable[[sqlite3.Connection, Any, Clock], Any] | None = None) -> list[threading.Thread]:
+    """Lance `threads` exécutants, chacun avec SA connexion SQLite. Renvoie les threads.
+
+    Le premier exécutant remet en file les tâches au bail expiré et, au lancement puis toutes les `watchdog_s`
+    secondes, passe le chien de garde (`watchdog`, par défaut modules.watchdog) : ce qui doit toujours tourner
+    est relancé s'il manque (un tick de l'autopilote mort sans successeur, par exemple)."""
     from loopcast import db
 
+    if watchdog is None:
+        from loopcast import modules
+
+        watchdog = modules.watchdog
+
     def loop(n: int) -> None:
-        conn = db.connect(db_path)
+        conn = None
         name = f"{socket.gethostname()}:{threading.get_ident()}:{n}"
+        next_watch = time.monotonic()
         while not stop.is_set():
             try:
+                if conn is None:             # base momentanément inaccessible : l'exécutant réessaie, il ne meurt pas
+                    conn = db.connect(db_path)
                 if n == 0:
+                    if watchdog_s > 0 and time.monotonic() >= next_watch:
+                        next_watch = time.monotonic() + watchdog_s
+                        watchdog(conn, config, clock)
                     requeue_expired(conn, clock=clock)
                 if run_one(conn, config, name, clock=clock, services=services, limits=limits) is None:
                     stop.wait(poll_s)
             except Exception:  # noqa: BLE001
                 log.exception("exécutant %s : erreur inattendue", name)
+                try:
+                    if conn is not None:
+                        _rollback(conn)      # jamais de transaction laissée ouverte : elle bloquerait toute la file
+                except sqlite3.Error:
+                    pass
                 stop.wait(poll_s)
 
     out = []

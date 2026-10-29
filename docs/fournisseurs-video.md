@@ -163,17 +163,20 @@ générations en attente jusqu'au lendemain, avec un événement `providers.budg
   Quand le modèle n'a que des durées fixes, il prend la plus proche au-dessus. La composition coupe, et la
   durée réelle figure dans le résultat.
 - **La tâche `video.generate`** déroule ces étapes :
-  1. elle vérifie le budget, en comptant les générations déjà en cours ;
-  2. elle soumet une seule fois, puis garde l'identifiant de la génération : une reprise après plantage
-     sonde au lieu de payer deux fois ;
+  1. elle vérifie le budget, en comptant les générations soumises mais pas encore inscrites au registre ;
+  2. elle soumet une seule fois et écrit aussitôt l'identifiant de la génération en base : une reprise après
+     plantage sonde au lieu de payer deux fois ;
   3. elle sonde de plus en plus espacé ;
-  4. si la génération échoue, elle refait un essai avec un autre modèle du même niveau, puis abandonne
+  4. dès que le fournisseur a fini, elle inscrit le coût au registre, avant de regarder le fichier : un
+     fichier refusé a été payé ;
+  5. si la génération échoue, elle refait un essai avec un autre modèle du même niveau, puis abandonne
      avec la raison ;
-  5. elle télécharge le fichier et le vérifie (taille, type, durée et format via ffprobe) ;
-  6. elle inscrit le coût au registre.
+  6. elle télécharge le fichier et le vérifie (taille, type, durée et format via ffprobe).
 
-  fal.ai ne renvoie pas le coût d'une requête : on inscrit l'estimation, marquée `estimated`. Rapprocher
-  chaque mois avec la facture fal.
+  Toute génération soumise finit inscrite au registre, une seule fois : terminée, en échec, annulée pour
+  délai dépassé, ou abandonnée (tâche morte, contenu abandonné par la production) — dans ce dernier cas par le
+  chien de garde du module, toutes les ~5 min. fal.ai ne renvoie pas le coût d'une requête : on inscrit
+  l'estimation, marquée `estimated`. Rapprocher chaque mois avec la facture fal.
 - **Fichiers** : ils sont rangés dans `data/media/<content_id>/shot-NN.mp4` (`image-NN.png` pour les images).
 
 ### Mettre la clé fal.ai (jamais dans git ni dans settings.yaml)
@@ -210,7 +213,7 @@ providers:
 ## Points ouverts
 
 - **Langues parlées** : la voix française n'est documentée que pour H3. Elle reste à juger à l'aveugle avant d'en faire le défaut de l'UGC.
-- **Échecs facturés ?** fal ne publie rien sur la facturation des générations échouées. Pour l'instant, elles ne sont pas inscrites au registre ; la première facture le dira.
+- **Échecs facturés ?** fal ne publie rien sur la facturation des générations échouées. Par prudence, elles sont inscrites au registre à leur estimation (marquée `estimated`, note « échec chez le fournisseur ») ; la première facture dira s'il faut les retirer.
 - **Seedance en direct chez BytePlus** : deux fois moins cher que sur fal. À brancher si Seedance devient courant.
 - **Image→vidéo non documentée** pour Veo 3.1 Lite, H3 Max Turbo et Gemini Omni Flash sur fal : ces modèles ne servent qu'en texte→vidéo.
 - **Prix en promotion** : dès le 01/11, relire les pages fal des modèles H3. Le catalogue retient déjà le prix normal.

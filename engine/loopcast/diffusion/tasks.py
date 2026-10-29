@@ -1,6 +1,8 @@
 """Les tâches du module diffusion (file de tâches durable, loopcast/jobs.py).
 
-- diffusion.tick    : l'autopilote, toutes les 10 min, se ré-enfile lui-même (autopilot.py)
+- diffusion.tick    : l'autopilote, toutes les 10 min, se ré-enfile lui-même (autopilot.py) ; une erreur
+                      passagère (base verrouillée en écrivant le tick suivant…) est réessayée 30 s puis 1 min
+                      plus tard, et le chien de garde (startup.watchdog) relance la chaîne si elle casse
 - diffusion.publish : publie un post dû (executor.py) ; payload {post_id, attempt}
 - diffusion.metrics : relève les vues puis cherche les gagnants (metrics.py)
 
@@ -14,7 +16,7 @@ from loopcast import jobs
 from loopcast.diffusion import autopilot, executor, metrics
 
 
-@jobs.handler("diffusion.tick", max_attempts=1, lease_s=600)
+@jobs.handler("diffusion.tick", max_attempts=3, lease_s=600, backoff_s=(30, 60))
 def tick(ctx: jobs.JobContext, payload: dict) -> dict:
     now = ctx.clock()
     autopilot.enqueue_tick(ctx.conn, now, next_slice=True)       # d'abord : la chaîne ne casse jamais

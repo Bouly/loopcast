@@ -54,7 +54,8 @@ class _BudgetRefused(Exception):
 
 def _ask(ctx: jobs.JobContext, *, task: str, system: str, content: str, schema: type, app_id: str,
          ref: str, wait_for_budget: bool = True) -> llm.LLMResult:
-    """Un appel à Claude : budget vérifié avant, coût inscrit après, erreurs traduites pour la file."""
+    """Un appel à Claude : budget vérifié avant, coût inscrit après (même si la réponse est inutilisable),
+    erreurs traduites pour la file."""
     now = ctx.clock()
     check = costs.check_budget(ctx.conn, _settings(ctx), now, ESTIMATE_USD.get(task, 0.5), app_id=app_id)
     if not check.ok:
@@ -65,12 +66,11 @@ def _ask(ctx: jobs.JobContext, *, task: str, system: str, content: str, schema: 
         raise jobs.RetryLater(max(60.0, delay), f"budget : {check.reason}")
     effort = _effort(ctx, task)
     try:
-        res = ctx.service("llm").structured(task=task, system=system, content=content, schema=schema,
-                                            **({"effort": effort} if effort else {}))
+        return llm.call_and_record(ctx.service("llm"), ctx.conn, clock=ctx.clock, task=task, system=system,
+                                   content=content, schema=schema, app_id=app_id, job_id=ctx.job.id, ref=ref,
+                                   **({"effort": effort} if effort else {}))
     except llm.LLMError as e:          # pas de clé, refus, réponse tronquée : réessayer n'y changera rien
         raise jobs.Permanent(f"{task} : {e}") from e
-    llm.record_cost(ctx.conn, res, at=ctx.clock(), task=task, app_id=app_id, job_id=ctx.job.id, ref=ref)
-    return res
 
 
 def _data_errors(fn):

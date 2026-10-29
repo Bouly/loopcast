@@ -59,12 +59,12 @@ App ajoutée ──► apps.ingest_source (App Store, site…)        ┐
 |---|---|
 | `engine/loopcast/db.py` + `migrations/NNNN_*.sql` | SQLite, migrations en fichiers. `0003_pipeline.sql` = le schéma commun. |
 | `engine/loopcast/jobs.py` | File de tâches durable : `@jobs.handler("kind")`, `enqueue(..., key=…)`, `RetryLater`, `Permanent`. |
-| `engine/loopcast/llm.py` | Claude : `ctx.service("llm").structured(task=…, system=…, content=…, schema=…)`, `image_block`, `record_cost`, `@demo_responder`. |
+| `engine/loopcast/llm.py` | Claude : `llm.call_and_record(ctx.service("llm"), conn, clock=…, task=…, system=…, content=…, schema=…)` (appel + coût au registre, succès comme échec), `image_block`, `@demo_responder`. |
 | `engine/loopcast/costs.py` | Registre des coûts et plafonds (`budget.daily_usd`, `daily_usd_per_app`, `monthly_usd`). |
 | `engine/loopcast/schemas.py` | Contrats : `ProductBrief`, `Question`, `AnalysisResult`, `Strategy`, `Idea`, `Shot`… |
 | `engine/loopcast/formats.py` | Catalogue des formats (`register`, `validate`, `catalog_for_prompt`). |
 | `engine/loopcast/accounts.py` | Comptes tirés de `devices.yaml` (`sync_from_config`, `list_accounts`, `phones_for_app`). |
-| `engine/loopcast/modules.py` | Branchement des modules (tâches, routes, CLI, démo, services). |
+| `engine/loopcast/modules.py` | Branchement des modules (tâches, routes, CLI, démo, services, démarrage, chien de garde). |
 | `engine/loopcast/api/deps.py` | Pour les routes : `deps.conn(request)` (connexion par thread), `deps.config`, `deps.services`, `deps.clock`, `deps.publish`. |
 | `engine/loopcast/api/core.py` | Routes communes : `/api/jobs`, `/api/costs`, `/api/status`. |
 
@@ -72,7 +72,9 @@ App ajoutée ──► apps.ingest_source (App Store, site…)        ┐
 
 Chaque module est un paquet `engine/loopcast/<module>/` qui ne touche qu'à ses fichiers. Il se branche
 via `modules.py` en fournissant (s'il en a besoin) `tasks.py`, `api.py` (`router`), `cli.py` (`register`),
-`demo.py`, `services.py` (`build(config, demo)`). Ses tests vont dans `engine/tests/<module>/`.
+`demo.py`, `services.py` (`build(config, demo)`), `startup.py` (`startup(conn, config, clock)` au démarrage ;
+`watchdog(conn, config, clock)`, le chien de garde que le premier exécutant de la file appelle toutes les
+~5 min pour relancer ce qui doit toujours tourner). Ses tests vont dans `engine/tests/<module>/`.
 
 | Module | Possède | Préfixe des tâches | Migrations | Routes |
 |---|---|---|---|---|
@@ -117,9 +119,11 @@ l'intégration l'ajoute à `settings.example.yaml`.
   `audio`), `model` (forcer un modèle) ; une image de départ doit être en 9:16 (une capture d'iPhone se pose
   d'abord sur un fond 9:16). Le résultat de la tâche donne aussi `provider`, `duration_s` réel, durées demandée
   et facturée. Enfiler `video.generate` avec `app_id` pour que le plafond par app s'applique.
-  La tâche `video.generate` (payload `{content_id, shot_index, request}`) fait submit → `RetryLater` tant
-  que ça calcule → download → inscrit le coût réel ; `production` l'enfile et attend son résultat
-  (`jobs.result` JSON `{path, cost_usd, model}`).
+  La tâche `video.generate` (payload `{content_id, shot_index, request}`) fait submit (identifiant écrit en
+  base aussitôt) → `RetryLater` tant que ça calcule → inscrit le coût dès que le fournisseur a fini → download ;
+  `production` l'enfile et attend son résultat (`jobs.result` JSON `{path, cost_usd, model}`). Toute génération
+  soumise finit au registre, une seule fois : une tâche annulée ou morte avec sa génération est inscrite à
+  l'estimation par le chien de garde de `providers`.
 - **Stock d'idées** : `diffusion` enfile `ideas.ensure_stock` (payload `{app_id}`) quand un compte manque de
   contenu validé ; `strategy` le traite (génère ce qui manque, jusqu'à `pipeline.stock_target` par téléphone).
 - **Événements** pour le front : `deps.publish(request, "<module>", {...})` ; les tâches inscrivent leurs
@@ -130,9 +134,12 @@ l'intégration l'ajoute à `settings.example.yaml`.
 - Code et noms en anglais ; commentaires, messages, UI et docs en français (CLAUDE.md).
 - Une tâche est **idempotente** (clé `key` stable : `f"apps.analyze:{app_id}:{brief_version}"`…) et courte ;
   ce qui attend un tiers lève `RetryLater`. Une erreur de donnée lève `Permanent` avec un message clair.
-- Claude n'est appelé que via `ctx.service("llm")` (jamais directement) ; chaque appel est inscrit avec
-  `llm.record_cost`. Chaque tâche qui appelle Claude a une réponse de démo (`@llm.demo_responder`) pour que
-  `serve --demo` montre tout le parcours sans clé.
+- Claude n'est appelé que via `ctx.service("llm")` (jamais directement), par `llm.call_and_record` : chaque
+  appel est inscrit au registre, même quand la réponse est inutilisable (refus, réponse tronquée : facturée
+  quand même, coût porté par `LLMError.result`). Chaque tâche qui appelle Claude a une réponse de démo
+  (`@llm.demo_responder`) pour que `serve --demo` montre tout le parcours sans clé.
+- Une notification (`notify.notify`) part en arrière-plan et ne bloque jamais : on peut alerter depuis une
+  transaction sans tenir le verrou de la base.
 - Les prompts vivent dans le module (`<module>/prompts.py` ou `.md`), en français pour les consignes, avec
   le savoir-faire partagé dans `engine/loopcast/knowledge/playbook.md` (lu au moment de l'appel).
 - Tests : pytest, sans réseau ni clé, avec `FakeLLM`, de faux fournisseurs et une horloge injectable.

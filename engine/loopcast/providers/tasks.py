@@ -6,15 +6,20 @@ Résultat : {"path", "cost_usd", "model", "provider", "duration_s", …} ; le fi
 
 Chaque passage est court ; entre deux, la tâche se rendort avec jobs.RetryLater en gardant son état dans
 son résultat (`jobs.result`) :
-- avant de soumettre : costs.check_budget avec l'estimation, plus ce qui est déjà en cours chez les
-  fournisseurs ; si ça ne passe pas, un niveau de qualité en dessous ; sinon attente jusqu'au lendemain,
-  avec un événement « providers.budget » ;
-- après la soumission, l'identifiant de la génération est gardé : une reprise (plantage, redémarrage du
-  Mac) sonde la même génération au lieu d'en payer une deuxième ;
+- avant de soumettre : costs.check_budget avec l'estimation, plus ce qui est déjà soumis mais pas encore
+  inscrit au registre ; si ça ne passe pas, un niveau de qualité en dessous ; sinon attente jusqu'au
+  lendemain, avec un événement « providers.budget » ;
+- juste après la soumission, avant tout autre travail, l'identifiant de la génération est écrit en base : une
+  reprise (plantage, redémarrage du Mac, état que la file n'a pas pu écrire) sonde la même génération au lieu
+  d'en payer une deuxième ;
 - sondage à intervalle croissant, délai maximal ; un échec du fournisseur → nouvel essai (un autre modèle du
   même niveau s'il y en a un), puis abandon (`dead`) avec la raison ;
-- téléchargement vérifié (taille, type, durée, format), puis costs.record du coût réel — l'estimation,
-  marquée `estimated`, si le fournisseur ne le donne pas — une seule fois, même si la tâche est rejouée.
+- toute génération soumise finit inscrite au registre (costs.record), une seule fois, même si la tâche est
+  rejouée : dès que le fournisseur a fini, AVANT le contrôle du fichier (un fichier refusé a été payé), en
+  échec, ou à l'annulation ; coût réel s'il est connu, sinon l'estimation, marquée `estimated`. Une tâche
+  morte ou annulée de l'extérieur (la production abandonne un contenu après son délai) : le chien de garde
+  du module inscrit l'estimation (settle_abandoned, providers/startup.py) ;
+- téléchargement vérifié (taille, type, durée, format).
 """
 
 from __future__ import annotations
@@ -23,11 +28,12 @@ import hashlib
 import json
 import logging
 import re
+import sqlite3
 import time
 from dataclasses import dataclass, fields, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from PIL import Image
 
@@ -39,6 +45,11 @@ log = logging.getLogger(__name__)
 
 KINDS = ("video", "image")
 SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+# L'identifiant d'une génération soumise doit être en base : base occupée → nouvel essai (chacun attend déjà
+# jusqu'à 10 s que le verrou se libère, busy_timeout de db.connect).
+STATE_WRITE_TRIES = 4
+STATE_WRITE_PAUSE_S = 1.0
 
 
 @dataclass(frozen=True)
@@ -96,8 +107,13 @@ def advance(ctx: jobs.JobContext, kind: str, payload: dict, state: dict) -> dict
         if st["status"] in ("queued", "running"):
             step.wait(state, st)
         if st["status"] == "failed":
-            step.failed(state, st.get("error") or "échec sans détail", bool(st.get("retryable", True)))
-        return step.finish(state, content_id, shot_index)
+            error = st.get("error") or "échec sans détail"
+            # Facturée ou non ? fal.ai ne le dit pas : coût réel s'il est connu, sinon l'estimation.
+            step.settle(state, f"échec chez le fournisseur ({error})"[:200])
+            step.failed(state, error, bool(st.get("retryable", True)))
+        # Terminée chez le fournisseur, donc facturée : inscrite AVANT le contrôle du fichier, qui peut la refuser.
+        cost, estimated = step.settle(state, "terminée")
+        return step.finish(state, content_id, shot_index, cost=cost, estimated=estimated)
     except ProviderAuthError as e:
         raise jobs.Permanent(str(e)) from e
 
@@ -150,6 +166,14 @@ class _Step:
                "billed_duration_s": route.billed_duration_s, "submitted_at": jobs.iso(self.now), "polls": 0,
                **{k: state[k] for k in ("failures", "tried_models", "banned_models", "exclude", "errors")
                   if state.get(k)}}
+        # Avant tout autre travail, l'identifiant en base : si la file ne peut pas écrire l'état ensuite (base
+        # verrouillée par un voisin), la reprise après le bail sondera CETTE génération au lieu d'en payer une autre.
+        try:
+            _save_state(self.ctx, new, tries=STATE_WRITE_TRIES)
+        except sqlite3.Error:
+            log.error("%s : génération %s soumise (≈ %.2f $) mais son identifiant n'a pas pu être écrit en base",
+                      self.label, handle, route.estimate_usd)
+            raise
         raise jobs.RetryLater(self.opts.poll_initial_s, f"soumis à {route.model.id}", result=new)
 
     def wait(self, state: dict, st: dict) -> None:
@@ -159,8 +183,10 @@ class _Step:
                 self.gen.cancel(state["handle"])
             except Exception as e:  # noqa: BLE001 : l'annulation est une politesse, pas une condition
                 log.warning("annulation impossible (%s) : %s", state["handle"], e)
-            self.failed(state, f"délai maximal dépassé ({self.opts.max_wait_s / 60:.0f} min, encore "
-                               f"« {st['status']} »)", True)
+            reason = (f"délai maximal dépassé ({self.opts.max_wait_s / 60:.0f} min, encore "
+                      f"« {st['status']} »)")
+            self.settle(state, f"annulée : {reason}", estimate_only=True)     # a pu être facturée quand même
+            self.failed(state, reason, True)
         polls = int(state.get("polls") or 0) + 1
         delay = min(self.opts.poll_max_s, self.opts.poll_initial_s * self.opts.poll_factor ** polls)
         raise jobs.RetryLater(delay, f"{st['status']} chez {state['model']}",
@@ -202,11 +228,28 @@ class _Step:
             return None
 
     def give_up(self, reason: str, errors: list[str]) -> None:
-        # Une relance à la main (dashboard) repartira de zéro : on efface le compte des échecs.
-        _save_state(self.ctx, {"errors": errors, "gave_up_at": jobs.iso(self.now), "reason": reason})
-        raise jobs.Permanent(reason)
+        # Une relance à la main (dashboard) repartira de zéro : l'état gardé n'a plus ni identifiant ni échecs.
+        raise jobs.Permanent(reason, result={"errors": errors, "gave_up_at": jobs.iso(self.now), "reason": reason})
 
-    def finish(self, state: dict, content_id: str, shot_index: int) -> dict:
+    def settle(self, state: dict, outcome: str, *, estimate_only: bool = False) -> tuple[float, bool]:
+        """Inscrit cette génération au registre, une seule fois (la référence est son identifiant) : coût réel
+        s'il est connu, sinon l'estimation, marquée `estimated`. Renvoie (coût, estimé ?)."""
+        actual = None if estimate_only else self._actual_cost(state["handle"])
+        cost = float(actual) if actual is not None else float(state.get("estimate_usd") or 0.0)
+        provider = state.get("provider") or self.gen.backend_of(state["model"])
+        _record_once(self.ctx.conn, self.kind, state, cost=cost, estimated=actual is None, provider=provider,
+                     app_id=self.ctx.job.app_id, job_id=self.ctx.job.id or None, now=self.now,
+                     note=self.label.split(" ", 1)[-1] + ("" if outcome == "terminée" else f" — {outcome}"))
+        return cost, actual is None
+
+    def _actual_cost(self, handle: str) -> float | None:
+        try:
+            return self.gen.cost(handle)
+        except Exception as e:  # noqa: BLE001 : sans coût réel, on inscrit l'estimation
+            log.warning("coût réel illisible pour %s : %s", handle, e)
+            return None
+
+    def finish(self, state: dict, content_id: str, shot_index: int, *, cost: float, estimated: bool) -> dict:
         dest_dir = media_dir(self.ctx.config) / content_id
         name = f"{'shot' if self.kind == 'video' else 'image'}-{shot_index:02d}"
         expect = {"aspect": self.req.aspect, "duration_s": state.get("billed_duration_s")}
@@ -215,15 +258,11 @@ class _Step:
         except ProviderAuthError:
             raise
         except ProviderError as e:                  # fichier inutilisable (durée, format, illisible, expiré)
-            self.failed(state, f"fichier inutilisable : {e}", e.retryable)
+            self.failed(state, f"fichier inutilisable : {e}", e.retryable)       # déjà inscrite au registre
         info = probe_video(path) if self.kind == "video" else check_image(path)
-        actual = self.gen.cost(state["handle"])
-        cost = float(actual) if actual is not None else float(state.get("estimate_usd") or 0.0)
         provider = state.get("provider") or self.gen.backend_of(state["model"])
-        _record_once(self.ctx, self.kind, state, cost=cost, estimated=actual is None, provider=provider,
-                     note=f"{content_id}#{shot_index}", now=self.now)
         result = {
-            "path": str(path), "cost_usd": round(cost, 4), "estimated": actual is None,
+            "path": str(path), "cost_usd": round(cost, 4), "estimated": estimated,
             "model": state["model"], "provider": provider, "tier": state.get("tier"),
             "downgraded": bool(state.get("downgraded")), "retries": int(state.get("failures") or 0),
             "width": info.width, "height": info.height,
@@ -251,27 +290,79 @@ def stored_state(ctx: jobs.JobContext) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _save_state(ctx: jobs.JobContext, state: dict) -> None:
-    """Pour l'abandon seulement : Permanent n'emporte pas de résultat, on l'écrit nous-mêmes."""
-    if ctx.job.id:
-        ctx.conn.execute("UPDATE jobs SET result=? WHERE id=?", (json.dumps(state, ensure_ascii=False), ctx.job.id))
+def _save_state(ctx: jobs.JobContext, state: dict, *, tries: int = 1) -> None:
+    """Écrit l'état de la tâche tout de suite, sans attendre la file (juste après une soumission). Une base
+    occupée (« database is locked ») est réessayée `tries` fois."""
+    if not ctx.job.id:
+        return
+    data = json.dumps(state, ensure_ascii=False)
+    for attempt in range(1, tries + 1):
+        try:
+            ctx.conn.execute("UPDATE jobs SET result=? WHERE id=?", (data, ctx.job.id))
+            return
+        except sqlite3.OperationalError as e:
+            if attempt >= tries or not _busy(e):
+                raise
+            log.warning("tâche #%s : état pas encore écrit (%s), essai %d/%d", ctx.job.id, e, attempt + 1, tries)
+            time.sleep(STATE_WRITE_PAUSE_S)
+
+
+def _busy(e: sqlite3.OperationalError) -> bool:
+    text = str(e).lower()
+    return "locked" in text or "busy" in text
 
 
 def inflight_usd(conn, *, exclude_job: int | None = None) -> float:
-    """Ce qui est soumis chez les fournisseurs mais pas encore inscrit au registre des coûts."""
-    total = 0.0
-    rows = conn.execute("""SELECT id, result FROM jobs WHERE kind IN ('video.generate', 'image.generate')
-                           AND status IN ('queued', 'running') AND result IS NOT NULL""")
-    for r in rows:
-        if r["id"] == exclude_job:
-            continue
-        try:
-            state = json.loads(r["result"])
-        except ValueError:
-            continue
-        if isinstance(state, dict) and state.get("handle"):
-            total += float(state.get("estimate_usd") or 0.0)
+    """Ce qui est soumis chez les fournisseurs mais pas encore inscrit au registre des coûts : les générations
+    en cours, et celles qu'une tâche morte ou annulée a laissées (en attente du chien de garde)."""
+    total = sum(float(state.get("estimate_usd") or 0.0)
+                for row, _kind, state in _unrecorded(conn, ("queued", "running", "dead", "cancelled"))
+                if row["id"] != exclude_job)
     return round(total, 4)
+
+
+def settle_abandoned(conn, now: datetime) -> int:
+    """Une génération soumise puis abandonnée — tâche morte, ou annulée de l'extérieur (la production renonce à
+    un contenu après son délai, une annulation à la main) — a pu être facturée : on inscrit son estimation,
+    marquée `estimated`, à la date de sa soumission. Appelée par le chien de garde du module
+    (providers/startup.py). Renvoie le nombre de générations inscrites."""
+    n = 0
+    for row, kind, state in list(_unrecorded(conn, ("dead", "cancelled"))):
+        payload = _loads(row["payload"])
+        target = f"{payload.get('content_id') or '?'}#{payload.get('shot_index', 0)}"
+        try:
+            submitted = min(datetime.fromisoformat(state["submitted_at"]), now)
+        except (KeyError, TypeError, ValueError):
+            submitted = now
+        n += _record_once(conn, kind, state, cost=float(state.get("estimate_usd") or 0.0), estimated=True,
+                          provider=state.get("provider") or "?", app_id=row["app_id"], job_id=row["id"],
+                          now=submitted, note=f"{target} — génération abandonnée (tâche {row['status']}), "
+                                              "coût estimé")
+    return n
+
+
+def _unrecorded(conn, statuses: tuple[str, ...]) -> Iterator[tuple[Any, str, dict]]:
+    """(ligne, video|image, état) des tâches de génération dans ces statuts dont la génération soumise
+    (son identifiant est dans l'état) n'est pas encore au registre des coûts."""
+    marks = ",".join("?" * len(statuses))
+    rows = conn.execute(f"""SELECT id, kind, status, app_id, payload, result FROM jobs
+                            WHERE kind IN ('video.generate', 'image.generate') AND status IN ({marks})
+                              AND result LIKE '%"handle"%'""", statuses).fetchall()
+    for r in rows:
+        state = _loads(r["result"])
+        if not state.get("handle"):
+            continue
+        kind = r["kind"].split(".", 1)[0]
+        if not _recorded(conn, kind, state["handle"]):
+            yield r, kind, state
+
+
+def _loads(raw: str | None) -> dict:
+    try:
+        data = json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def media_dir(config: Any) -> Path:
@@ -322,17 +413,22 @@ def _ref(handle: str) -> str:
     return f"{handle.split('|')[0]}|sha1:{hashlib.sha1(handle.encode()).hexdigest()}"
 
 
-def _record_once(ctx: jobs.JobContext, kind: str, state: dict, *, cost: float, estimated: bool, provider: str,
-                 note: str, now: datetime) -> None:
-    ref = _ref(state["handle"])
-    if ctx.conn.execute("SELECT 1 FROM cost_ledger WHERE ref=? AND kind=?", (ref, kind)).fetchone():
-        return                                   # déjà inscrit (tâche rejouée après un plantage)
+def _recorded(conn, kind: str, handle: str) -> bool:
+    return conn.execute("SELECT 1 FROM cost_ledger WHERE ref=? AND kind=?", (_ref(handle), kind)).fetchone() is not None
+
+
+def _record_once(conn, kind: str, state: dict, *, cost: float, estimated: bool, provider: str,
+                 app_id: str | None, job_id: int | None, note: str, now: datetime) -> int:
+    """Inscrit la génération de `state` au registre si elle n'y est pas déjà. Renvoie 1 si une ligne est écrite."""
+    if _recorded(conn, kind, state["handle"]):
+        return 0                                 # déjà inscrite (tâche rejouée, ou chien de garde passé avant)
     if provider == "fake" and cost == 0:
-        return                                   # comme la démo de Claude : rien à inscrire
+        return 0                                 # comme la démo de Claude : rien à inscrire
     units, unit = (state.get("billed_duration_s"), "seconds") if kind == "video" else (1, "images")
-    costs.record(ctx.conn, at=now, provider=provider, kind=kind, cost_usd=cost, app_id=ctx.job.app_id,
-                 model=state["model"], units=units, unit=unit, estimated=estimated, job_id=ctx.job.id or None,
-                 ref=ref, note=note)
+    costs.record(conn, at=now, provider=provider, kind=kind, cost_usd=cost, app_id=app_id,
+                 model=state.get("model"), units=units, unit=unit, estimated=estimated, job_id=job_id,
+                 ref=_ref(state["handle"]), note=note)
+    return 1
 
 
 def _event(ctx: jobs.JobContext, kind: str, message: str) -> None:

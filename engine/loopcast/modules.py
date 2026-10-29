@@ -6,7 +6,9 @@ Chaque module est un paquet `loopcast.<nom>` qui peut fournir :
 - `cli.py`    : `register(subparsers)` pour ses commandes `python -m loopcast <nom> …` ;
 - `demo.py`   : ses réponses de démo (@llm.demo_responder) ;
 - `services.py` : `build(config, demo) -> dict` pour les services qu'il fournit (fournisseurs vidéo…) ;
-- `startup.py` : `startup(conn, config, clock)` appelé au démarrage des exécutants (premier tick…).
+- `startup.py` : `startup(conn, config, clock)` appelé au démarrage des exécutants (premier tick…), et
+  `watchdog(conn, config, clock)`, le chien de garde, appelé toutes les ~5 min par le premier exécutant de la
+  file (jobs.run_worker) : il relance ce qui doit toujours tourner (le tick de l'autopilote…).
 
 Un module absent est simplement ignoré ; un module présent mais cassé fait échouer le démarrage
 (on préfère une erreur claire à un pipeline qui tourne à moitié).
@@ -84,3 +86,18 @@ def startup(conn: Any, config: Any, clock: Any) -> None:
                 m.startup(conn, config, clock)
             except Exception:  # noqa: BLE001 : un module ne doit pas empêcher les autres de démarrer
                 log.exception("démarrage du module %s en échec", m.__name__)
+
+
+def watchdog(conn: Any, config: Any, clock: Any) -> None:
+    """Le chien de garde de chaque module qui en fournit un (`watchdog` dans son startup.py), appelé par le
+    premier exécutant de la file au lancement puis toutes les ~5 min. Un module en erreur n'arrête pas les autres."""
+    for m in load("startup"):
+        fn = getattr(m, "watchdog", None)
+        if fn is None:
+            continue
+        try:
+            fn(conn, config, clock)
+        except Exception:  # noqa: BLE001 : le chien de garde d'un module ne doit pas faire taire les autres
+            log.exception("chien de garde du module %s en échec", m.__name__)
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")

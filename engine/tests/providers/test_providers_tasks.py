@@ -1,15 +1,19 @@
 """Tâches video.generate / image.generate : de bout en bout par la file, reprise après plantage, coûts, budget."""
 
 import json
+import sqlite3
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
-from providers_testkit import (events, image_model, image_router, job_row, job_state, run_until_settled,
+from providers_testkit import (epoch, events, image_model, image_router, job_row, job_state, run_until_settled,
                                video_model, video_router)
 
 from loopcast import costs, jobs
 from loopcast.providers import tasks
-from loopcast.providers.base import probe_video
+from loopcast.providers.base import ProviderError, probe_video
+from loopcast.providers.fake import FakeVideoProvider
+from loopcast.providers.router import Router
 
 
 def enqueue(conn, clock, request: dict, *, content_id="habitudo-fr-0007", shot_index=0, kind="video",
@@ -239,3 +243,151 @@ def test_run_inline_for_the_cli(conn, config, clock):
                               clock=clock, sleep=sleep)
     assert result["model"] == "std-a" and waits[0] == 10 and waits[1] == 15
     assert ledger(conn)[0]["job_id"] is None
+
+
+# --- Toute génération soumise finit inscrite au registre, une seule fois ------------------------------------
+
+class _RejectedFile(FakeVideoProvider):
+    """Comme fal.ai (pas de coût réel) ; la génération se termine (facturée) mais le fichier est refusé au contrôle."""
+
+    def download(self, handle, dest_dir, *, name=None, expect=None):
+        raise ProviderError("durée 5.0 s au lieu de 8 s", code="bad_output")
+
+
+def _fal_like(models, clock, cls=FakeVideoProvider, **kw) -> Router:
+    providers = {m.id: cls(m, scale=0.25, bill=True, report_cost=False, clock=epoch(clock), **kw) for m in models}
+    return Router("video", models, providers, mode="fal", why="tests")
+
+
+def test_a_rejected_file_is_recorded_before_the_next_generation(conn, config, clock):
+    """Le fichier livré est refusé (durée, format) : la génération a été payée. Avant, la tâche en relançait une
+    autre en perdant l'identifiant et l'estimation : 3 générations facturées, rien au registre, budget aveugle."""
+    models = [video_model("mod-a", usd_per_s=0.40), video_model("mod-b", usd_per_s=0.45),
+              video_model("mod-c", usd_per_s=0.50)]
+    router = _fal_like(models, clock, cls=_RejectedFile)
+    job_id = enqueue(conn, clock, {"prompt": "A person waking up", "duration_s": 8})
+
+    jobs.run_one(conn, config, "w", clock=clock, services={"video": router})              # soumission
+    clock.now = datetime.fromisoformat(job_row(conn, job_id)["run_after"])
+    jobs.run_one(conn, config, "w", clock=clock, services={"video": router})              # terminée, refusée
+    first = ledger(conn)
+    assert [(r["model"], r["cost_usd"], r["estimated"]) for r in first] == [("mod-a", 3.2, 1)]
+    assert not job_state(conn, job_id).get("handle") and tasks.inflight_usd(conn) == 0     # rien « en vol » perdu
+
+    assert run_until_settled(conn, config, clock, {"video": router}, job_id) == "dead"
+    rows = ledger(conn)
+    assert [(r["model"], r["cost_usd"], r["estimated"], r["job_id"]) for r in rows] == [
+        ("mod-a", 3.2, 1, job_id), ("mod-b", 3.6, 1, job_id), ("mod-c", 4.0, 1, job_id)]
+    assert submissions(router) == 3 and sum(r["cost_usd"] for r in rows) == pytest.approx(10.80)
+    assert costs.spent(conn, costs.day_start(clock()), "habitudo") == pytest.approx(10.80)
+    assert tasks.inflight_usd(conn) == 0
+
+
+def test_a_provider_failure_without_known_cost_is_recorded_at_its_estimate(conn, config, clock):
+    """fal.ai ne dit pas si une génération en échec est facturée : par prudence, son estimation est inscrite."""
+    router = _fal_like([video_model("std-a"), video_model("std-b", usd_per_s=0.12)], clock)
+    router.providers["std-a"].fail_first = 1
+    job_id = enqueue(conn, clock, {"prompt": "City at night", "duration_s": 3})
+    assert run_until_settled(conn, config, clock, {"video": router}, job_id) == "done"
+    rows = ledger(conn)
+    assert [(r["model"], r["cost_usd"], r["estimated"]) for r in rows] == [("std-a", 0.3, 1), ("std-b", 0.36, 1)]
+    assert "échec chez le fournisseur" in rows[0]["note"] and rows[1]["note"] == "habitudo-fr-0007#0"
+
+
+def test_a_generation_cancelled_after_the_maximal_wait_is_recorded_at_its_estimate(conn, config, clock):
+    config.settings["providers"] = {"video": {"max_wait_s": 120, "poll_initial_s": 30}}
+    router = video_router([video_model("std-a"), video_model("std-b")], clock, per_model={"std-a": {"delay_s": 10_000}})
+    job_id = enqueue(conn, clock, {"prompt": "Forest", "duration_s": 2})
+    assert run_until_settled(conn, config, clock, {"video": router}, job_id) == "done"
+    rows = ledger(conn)
+    assert [(r["model"], r["cost_usd"], r["estimated"]) for r in rows] == [("std-a", 0.2, 1), ("std-b", 0.2, 0)]
+    assert "annulée : délai maximal dépassé" in rows[0]["note"]
+
+
+def test_a_generation_given_up_by_the_production_is_recorded_at_its_estimate(conn, config, clock):
+    """La production annule une génération encore en cours après son délai (contenu en échec) : plus personne ne
+    la sonde. Le budget la compte toujours, et le chien de garde l'inscrit à son estimation, une seule fois."""
+    router = _fal_like([video_model("std-a", usd_per_s=0.40)], clock, delay_s=10 ** 6)
+    job_id = enqueue(conn, clock, {"prompt": "Slow one", "duration_s": 8})
+    jobs.run_one(conn, config, "w", clock=clock, services={"video": router})              # soumise (3,20 $)
+    submitted_at = clock()
+    clock.advance(hours=25)
+    assert jobs.cancel(conn, job_id, clock=clock)                                           # production : abandon
+    assert tasks.inflight_usd(conn) == pytest.approx(3.20)                                  # toujours compté
+
+    assert tasks.settle_abandoned(conn, clock()) == 1
+    (row,) = ledger(conn)
+    assert (row["model"], row["cost_usd"], row["estimated"], row["job_id"]) == ("std-a", 3.2, 1, job_id)
+    assert row["at"] == jobs.iso(submitted_at) and "abandonnée (tâche cancelled)" in row["note"]
+    assert tasks.inflight_usd(conn) == 0 and tasks.settle_abandoned(conn, clock()) == 0   # une seule fois
+
+    # Relancée à la main ensuite : elle sonde la même génération, sans nouvelle soumission ni seconde ligne.
+    router.providers["std-a"].delay_s = 0
+    assert jobs.retry(conn, job_id, clock=clock)
+    assert run_until_settled(conn, config, clock, {"video": router}, job_id) == "done"
+    assert submissions(router) == 1 and len(ledger(conn)) == 1
+
+
+def test_a_dead_job_holding_a_generation_is_recorded_by_the_watchdog(conn, config, clock):
+    """Clé fal.ai révoquée pendant le sondage : la tâche meurt avec l'identifiant de sa génération."""
+    from loopcast import modules
+    from loopcast.providers.base import ProviderAuthError
+
+    router = _fal_like([video_model("std-a", usd_per_s=0.40)], clock, delay_s=60)
+    job_id = enqueue(conn, clock, {"prompt": "Revoked", "duration_s": 5})
+    jobs.run_one(conn, config, "w", clock=clock, services={"video": router})
+
+    def revoked(handle):
+        raise ProviderAuthError("clé fal.ai refusée")
+
+    router.poll = revoked
+    assert run_until_settled(conn, config, clock, {"video": router}, job_id) == "dead"
+    assert job_state(conn, job_id)["handle"] and not ledger(conn)
+    modules.watchdog(conn, config, clock)                                     # le chien de garde du module
+    assert [(r["cost_usd"], r["estimated"]) for r in ledger(conn)] == [(2.0, 1)]
+    assert any(kind == "providers.cost" for kind, _ in events(conn))
+
+
+def test_the_handle_is_in_the_database_even_if_the_queue_cannot_save_the_state(conn, config, clock, monkeypatch):
+    """La file n'arrive pas à écrire l'état (base verrouillée par un voisin plus de 10 s) : l'identifiant de la
+    génération est déjà en base, et la reprise après le bail la sonde au lieu d'en payer une seconde."""
+    router = video_router([video_model("std-a")], clock, delay_s=30)
+    job_id = enqueue(conn, clock, {"prompt": "Locked", "duration_s": 2})
+    real = jobs.retry_later
+
+    def locked(*a, **kw):
+        monkeypatch.setattr(jobs, "retry_later", real)
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(jobs, "retry_later", locked)
+    with pytest.raises(sqlite3.OperationalError):
+        jobs.run_one(conn, config, "w1", clock=clock, services={"video": router})
+    assert job_row(conn, job_id)["status"] == "running" and job_state(conn, job_id)["handle"]
+    clock.advance(seconds=601)
+    assert jobs.requeue_expired(conn, clock=clock) == 1
+    assert run_until_settled(conn, config, clock, {"video": video_router([video_model("std-a")], clock)}, job_id) \
+        == "done"
+    assert submissions(router) == 1 and len(ledger(conn)) == 1
+
+
+def test_the_handle_write_waits_for_a_busy_database(tmp_path, config, clock, monkeypatch):
+    """Juste après la soumission, une base occupée ne fait pas perdre l'identifiant : l'écriture est réessayée."""
+    from loopcast import db
+
+    path = tmp_path / "loopcast.db"
+    worker, neighbour = db.connect(path), db.connect(path)
+    worker.execute("PRAGMA busy_timeout=50")
+    job_id = jobs.enqueue(worker, "video.generate", {"content_id": "c1", "request": {}}, clock=clock)
+    neighbour.execute("BEGIN IMMEDIATE")                       # un voisin tient le verrou d'écriture…
+    pauses = []
+
+    def pause(seconds):
+        pauses.append(seconds)
+        if neighbour.in_transaction:
+            neighbour.execute("COMMIT")                        # … et le rend pendant la pause
+
+    monkeypatch.setattr(tasks, "time", SimpleNamespace(sleep=pause))
+    job = jobs.Job(job_id, "video.generate", None, {}, 1, 5, None, None)
+    ctx = jobs.JobContext(conn=worker, config=config, job=job, clock=clock)
+    tasks._save_state(ctx, {"handle": "std-a|fake-x"}, tries=tasks.STATE_WRITE_TRIES)
+    assert pauses == [tasks.STATE_WRITE_PAUSE_S] and job_state(neighbour, job_id) == {"handle": "std-a|fake-x"}
