@@ -68,3 +68,20 @@ def test_qa_command(root, tmp_path, capsys):
     assert cli.main(["content", "qa", idea_id]) == 0
     assert json.loads(root.content(idea_id)["qa"])["ok"]
     assert cli.main(["content", "qa", "ni-fichier-ni-contenu"]) == 1
+
+
+def test_node_named_in_settings_is_found_where_it_is_installed(tmp_path, monkeypatch):
+    """`render.node: node` (la valeur par défaut) ne doit pas empêcher de trouver Node dans ~/.local/node/bin quand
+    le PATH du service ne l'a pas : sinon chaque rendu meurt sur « Node introuvable »."""
+    from loopcast.production import options
+
+    monkeypatch.setenv("PATH", str(tmp_path / "vide"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    node = tmp_path / ".local" / "node" / "bin" / "node"
+    node.parent.mkdir(parents=True)
+    node.write_text("#!/bin/sh\n")
+    node.chmod(0o755)
+    monkeypatch.setattr(options, "_TOOL_DIRS", ("~/.local/node/bin",))
+    assert options.node_bin({"render": {"node": "node"}}) == str(node)
+    assert options.node_bin({}) == str(node)
+    assert options.node_bin({"render": {"node": str(tmp_path / "absent" / "node")}}) is None   # chemin explicite faux

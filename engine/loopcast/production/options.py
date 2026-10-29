@@ -79,10 +79,15 @@ def max_auto_retries(settings: dict) -> int:
 
 
 def tool(name: str, configured: Any = None) -> str | None:
-    """Chemin d'un exécutable : réglage explicite, sinon PATH, sinon emplacements usuels du Mac."""
+    """Chemin d'un exécutable : réglage explicite, sinon PATH, sinon emplacements usuels du Mac. Un réglage qui
+    n'est qu'un nom (« node », la valeur par défaut) se cherche aussi aux emplacements usuels : un service lancé
+    sans ~/.local/node/bin dans son PATH trouve quand même le Node installé là."""
     if configured:
-        path = shutil.which(str(configured)) or (str(configured) if Path(str(configured)).exists() else None)
-        return path
+        configured = str(configured)
+        path = shutil.which(configured) or (configured if Path(configured).exists() else None)
+        if path or "/" in configured:
+            return path
+        name = configured
     found = shutil.which(name)
     if found:
         return found
