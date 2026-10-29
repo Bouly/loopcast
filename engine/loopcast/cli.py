@@ -17,9 +17,9 @@ from loopcast import db
 
 
 def _setup(args) -> tuple[cfg.Config, object]:
-    config = cfg.load()
-    if getattr(args, "demo", False):
-        config.farm.backend = "fake"
+    """Configuration et base de la commande. `--demo` : configuration de démo (config.as_demo), donc base
+    data/demo.db et iPhones simulés ; data/loopcast.db n'est jamais ouverte."""
+    config = cfg.load(demo=True if getattr(args, "demo", False) else None)
     return config, db.connect(config.db_path)
 
 
@@ -43,14 +43,14 @@ def cmd_serve(args) -> int:
     from loopcast.api.app import create_app
 
     config, conn = _setup(args)
-    if args.demo:
+    if config.demo:
         _seed_demo_config(config)
     from loopcast import modules
 
     modules.load_all()
     app = create_app(config, conn, _backend(config), supervise=not args.no_supervise,
                      web_dist=config.root / "web" / "dist", run_jobs=not args.no_jobs,
-                     services=modules.services(config, demo=args.demo))
+                     services=modules.services(config, demo=config.demo), db_path=config.db_path)
     if args.host not in ("127.0.0.1", "localhost") and not args.host.startswith("100."):
         print("Attention : n'écouter que sur 127.0.0.1 ou l'adresse Tailscale (100.x), jamais sur internet.",
               file=sys.stderr)
@@ -70,7 +70,7 @@ def cmd_farm_list(args) -> int:
     from loopcast.farm.supervisor import Supervisor, list_phones
 
     config, conn = _setup(args)
-    if args.demo:
+    if config.demo:
         _seed_demo_config(config)
     Supervisor(config, conn, _backend(config)).tick()
     rows = list_phones(conn, config)
@@ -89,7 +89,7 @@ def cmd_farm_watch(args) -> int:
     from loopcast.notify import is_alert, notify
 
     config, conn = _setup(args)
-    if args.demo:
+    if config.demo:
         _seed_demo_config(config)
 
     def on_events(events):
@@ -172,7 +172,7 @@ def cmd_worker(args) -> int:
     modules.startup(conn, config, jobs.utcnow)
     stop = threading.Event()
     jobs_cfg = config.settings.get("jobs") or {}
-    jobs.run_worker(str(config.db_path), config, stop, services=modules.services(config, demo=args.demo),
+    jobs.run_worker(str(config.db_path), config, stop, services=modules.services(config, demo=config.demo),
                     threads=args.threads, limits=jobs_cfg.get("limits") or {})
     print(f"File de tâches : {args.threads} exécutants. Ctrl+C pour arrêter.")
     try:
@@ -208,6 +208,8 @@ def cmd_jobs_retry(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
     p = argparse.ArgumentParser(prog="loopcast")
+    p.add_argument("--demo", dest="demo_all", action="store_true",
+                   help="toute commande sur la base de démo (data/demo.db, fichiers sous data/demo/) : rien de réel")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("serve", help="API (et front construit) sur http://127.0.0.1:8787")
@@ -251,4 +253,12 @@ def main(argv: list[str] | None = None) -> int:
     f.set_defaults(fn=cmd_farm_doctor)
 
     args = p.parse_args(argv)
-    return args.fn(args)
+    # `--demo`, avant la commande ou dans une commande qui le prend (serve, worker, farm, apps … --run,
+    # strategy … --run, providers…) : toute la commande tourne sur la configuration de démo, même les
+    # modules qui chargent la configuration eux-mêmes. La vraie base n'est jamais ouverte.
+    demo = bool(args.demo_all or getattr(args, "demo", False))
+    if demo:
+        print("Mode démo : base data/demo.db, fichiers sous data/demo/ (data/loopcast.db n'est pas touchée).",
+              file=sys.stderr)
+    with cfg.demo_mode(demo):
+        return args.fn(args)
