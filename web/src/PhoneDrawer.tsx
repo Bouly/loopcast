@@ -156,7 +156,7 @@ export function PhoneDrawer({ phone, onClose }: { phone: Phone; onClose: () => v
               ))}
             </div>
             <div className="device-cap">
-              <span>{controlled ? "En direct, 10 images/s" : "Capture toutes les 5 s"}</span>
+              <span>{controlled ? "En direct, jusqu'à 24 images/s" : "Capture toutes les 5 s"}</span>
               {controlled && (
                 <button className="btn ghost sm" onClick={() => setNonce((n) => n + 1)}>
                   <Icon icon={RefreshIcon} size={14} />

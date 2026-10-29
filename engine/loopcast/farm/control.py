@@ -88,8 +88,9 @@ def capabilities(config: Config, phone: PhoneConfig) -> dict:
 
 # Réglages appliqués à chaque session WebDriverAgent.
 WDA_SETTINGS = {
-    # Flux d'écran léger pour le dashboard : 10 i/s, demi-résolution
-    "mjpegServerFramerate": 10,
+    # Flux d'écran du dashboard en demi-résolution : 24 i/s (à 10, le direct était saccadé ; WDA tient 25 à 30 i/s
+    # sur un iPhone récent, au prix d'un peu plus de travail pendant qu'on a la main)
+    "mjpegServerFramerate": 24,
     "mjpegScalingFactor": 50,
     # Ne pas attendre que l'app soit « au repos » : TikTok ou Instagram, avec leur vidéo en continu,
     # ne le sont jamais. Sans ça, captures et flux échouent (« Cannot take a screenshot within
